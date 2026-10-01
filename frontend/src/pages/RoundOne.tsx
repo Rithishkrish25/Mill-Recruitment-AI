@@ -324,7 +324,7 @@ export default function RoundOne() {
 
       const value =
         currentCandidate[
-          field as keyof CandidateDetails
+        field as keyof CandidateDetails
         ];
 
       if (!hasValue(value)) {
@@ -501,26 +501,34 @@ export default function RoundOne() {
   async function saveDetectedDetails(
     oldCandidate: CandidateDetails,
     newCandidate: CandidateDetails,
-    mode: "text" | "voice"
+    answerMode: "text" | "voice"
   ) {
-    const changedFields =
-      FIELD_ORDER.filter((field) => {
+    const fieldsToSave = [
+      ...FIELD_ORDER,
+      "blood_group",
+      "phone",
+      "email",
+    ];
+
+    const changedFields = fieldsToSave.filter(
+      (field) => {
         const oldValue =
           oldCandidate[
-            field as keyof CandidateDetails
+          field as keyof CandidateDetails
           ];
 
         const newValue =
           newCandidate[
-            field as keyof CandidateDetails
+          field as keyof CandidateDetails
           ];
 
         return (
           hasValue(newValue) &&
           String(oldValue ?? "") !==
-            String(newValue ?? "")
+          String(newValue ?? "")
         );
-      });
+      }
+    );
 
     const session =
       await ensureInterviewSession(
@@ -528,58 +536,33 @@ export default function RoundOne() {
       );
 
     if (!session) {
-      return;
+      throw new Error(
+        "Interview session is not ready."
+      );
     }
-
-    /* -------------------------------------------------------
-       UPDATE CANDIDATE
-    ------------------------------------------------------- */
 
     await updateCandidate(
       session.candidateId,
       {
-        fullName:
-          newCandidate.full_name,
-
-        age:
-          newCandidate.age,
-
-        gender:
-          newCandidate.gender,
-
-        bloodGroup:
-          newCandidate.blood_group,
-
-        phone:
-          newCandidate.phone,
-
-        email:
-          newCandidate.email,
-
-        address:
-          newCandidate.address,
-
-        education:
-          newCandidate.education,
-
-        experienceYears:
-          newCandidate.experience_years,
-
-        previousCompany:
-          newCandidate.previous_company,
-
-        candidateLevel:
-          newCandidate.candidate_level,
+        fullName: newCandidate.full_name,
+        age: newCandidate.age,
+        gender: newCandidate.gender,
+        bloodGroup: newCandidate.blood_group,
+        phone: newCandidate.phone,
+        email: newCandidate.email,
+        address: newCandidate.address,
+        education: newCandidate.education,
+        experienceYears: newCandidate.experience_years,
+        previousCompany: newCandidate.previous_company,
+        candidateLevel: newCandidate.candidate_level,
       }
     );
 
-    /* -------------------------------------------------------
-       SAVE ANSWERS
-    ------------------------------------------------------- */
-
     for (const field of changedFields) {
-      const question =
-        getQuestion(field);
+      const question = questions.find(
+        (item) =>
+          item.field_key === field
+      );
 
       if (!question) {
         continue;
@@ -587,101 +570,95 @@ export default function RoundOne() {
 
       const value =
         newCandidate[
-          field as keyof CandidateDetails
+        field as keyof CandidateDetails
         ];
+
+      if (!hasValue(value)) {
+        continue;
+      }
 
       await saveRoundOneAnswer({
         candidateId:
           session.candidateId,
-
         interviewId:
           session.interviewId,
-
         roundId:
           session.roundId,
-
-        questionId:
-          question.id,
-
-        answerText:
-          String(value ?? ""),
-
-        normalizedValue:
-          String(value ?? ""),
-
-        answerMode:
-          mode,
+        questionId: question.id,
+        answerText: String(value),
+        normalizedValue: String(value),
+        answerMode,
       });
     }
   }
 
-  /* =========================================================
-     CONVERSATION
-  ========================================================= */
+/* =========================================================
+   CONVERSATION
+========================================================= */
 
-  async function startConversation(
-    level: "staff" | "workmen",
-    currentCandidate: CandidateDetails
-  ) {
-    if (introStartedRef.current) {
-      return;
-    }
-
-    introStartedRef.current = true;
-
-    setInterviewStarted(true);
-
-    candidateRef.current =
-      currentCandidate;
-
-    const welcome =
-      level === "workmen"
-        ? "வணக்கம்! ராஜபாளையம் மில்ஸ் நேர்காணலுக்கு உங்களை அன்புடன் வரவேற்கிறோம். இப்போது நம்ம நேர்காணலை தொடங்கலாம். நீங்கள் தமிழ் மொழியில் பதில் அளிக்கலாம். முதலில் உங்கள் அடிப்படை விவரங்களைப் பற்றி கொஞ்சம் பேசலாம். தயாராக இருக்கிறீர்களா?"
-        : "Welcome to the Rajapalayam Mills interview. We will now begin with your basic information. Are you ready?";
-
-    await addAIMessage(
-      welcome,
-      level
-    );
-
-    await askNextMissingField(
-      currentCandidate
-    );
+async function startConversation(
+  level: "staff" | "workmen",
+  currentCandidate: CandidateDetails
+) {
+  if (introStartedRef.current) {
+    return;
   }
 
-  async function addAIMessage(
-    text: string,
-    level: "staff" | "workmen" =
-      candidateLevel
-  ) {
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        role: "ai",
-        text,
-      },
-    ]);
+  introStartedRef.current = true;
 
-    await speakText(text, level);
-  }
+  setInterviewStarted(true);
 
-  function addCandidateMessage(
-    text: string,
-    mode: "text" | "voice"
-  ) {
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        role: "candidate",
-        text,
-        mode,
-      },
-    ]);
-  }
+  candidateRef.current =
+    currentCandidate;
 
-  async function askNextMissingField(
+  const welcome =
+    level === "workmen"
+      ? "வணக்கம்! ராஜபாளையம் மில்ஸ் நேர்காணலுக்கு உங்களை அன்புடன் வரவேற்கிறோம். இப்போது நம்ம நேர்காணலை தொடங்கலாம். நீங்கள் தமிழ் மொழியில் பதில் அளிக்கலாம். முதலில் உங்கள் அடிப்படை விவரங்களைப் பற்றி கொஞ்சம் பேசலாம். தயாராக இருக்கிறீர்களா?"
+      : "Welcome to the Rajapalayam Mills interview. We will now begin with your basic information. Are you ready?";
+
+  await addAIMessage(
+    welcome,
+    level
+  );
+
+  await askNextMissingField(
+    currentCandidate
+  );
+}
+
+async function addAIMessage(
+  text: string,
+  level: "staff" | "workmen" =
+    candidateLevel
+) {
+  setMessages((prev) => [
+    ...prev,
+    {
+      id: crypto.randomUUID(),
+      role: "ai",
+      text,
+    },
+  ]);
+
+  await speakText(text, level);
+}
+
+function addCandidateMessage(
+  text: string,
+  mode: "text" | "voice"
+) {
+  setMessages((prev) => [
+    ...prev,
+    {
+      id: crypto.randomUUID(),
+      role: "candidate",
+      text,
+      mode,
+    },
+  ]);
+}
+
+async function askNextMissingField(
   currentCandidate: CandidateDetails
 ) {
   const missingField =
@@ -715,7 +692,7 @@ export default function RoundOne() {
   const text =
     candidateLevel === "workmen"
       ? question.question_text_tamil ||
-        question.question_text
+      question.question_text
       : question.question_text;
 
   await addAIMessage(
@@ -734,1759 +711,1758 @@ export default function RoundOne() {
   }
 }
 
-  /* =========================================================
-     EXTRACTION
-  ========================================================= */
+/* =========================================================
+   EXTRACTION
+========================================================= */
 
-  function extractDetails(
-    text: string,
-    currentField: string | null
-  ): Partial<CandidateDetails> {
-    const result: Partial<CandidateDetails> =
-      {};
+function extractDetails(
+  text: string,
+  currentField: string | null
+): Partial<CandidateDetails> {
+  const result: Partial<CandidateDetails> =
+    {};
 
-    const input =
-      text.trim();
+  const input =
+    text.trim();
 
-    /* NAME */
+  /* NAME */
 
-    const nameMatch =
-      input.match(
-        /(?:my name is|my name's|name is|i am|i'm|என் பெயர்|என்னுடைய பெயர்)\s+([A-Za-z][A-Za-z .'-]{1,60})/i
-      );
+  const nameMatch =
+    input.match(
+      /(?:my name is|my name's|name is|i am|i'm|என் பெயர்|என்னுடைய பெயர்)\s+([A-Za-z][A-Za-z .'-]{1,60})/i
+    );
 
-    if (nameMatch) {
-      result.full_name =
-        cleanText(nameMatch[1]);
-    }
+  if (nameMatch) {
+    result.full_name =
+      cleanText(nameMatch[1]);
+  }
+
+  if (
+    !result.full_name &&
+    currentField === "full_name"
+  ) {
+    const possibleName =
+      cleanText(input);
 
     if (
-      !result.full_name &&
-      currentField === "full_name"
+      possibleName.length >= 2 &&
+      !/\d/.test(possibleName) &&
+      possibleName.split(" ").length <= 5
     ) {
-      const possibleName =
-        cleanText(input);
+      result.full_name =
+        possibleName;
+    }
+  }
+
+  /* AGE */
+
+  const ageMatch =
+    input.match(
+      /(?:age|years old|வயது|வயசு)\s*(?:is|=|:)?\s*(\d{1,3})/i
+    );
+
+  if (ageMatch) {
+    result.age =
+      Number(ageMatch[1]);
+  }
+
+  if (
+    result.age === undefined &&
+    currentField === "age"
+  ) {
+    const n =
+      input.match(
+        /\b(\d{1,3})\b/
+      );
+
+    if (n) {
+      const age =
+        Number(n[1]);
 
       if (
-        possibleName.length >= 2 &&
-        !/\d/.test(possibleName) &&
-        possibleName.split(" ").length <= 5
+        age >= 15 &&
+        age <= 80
       ) {
-        result.full_name =
-          possibleName;
+        result.age = age;
       }
     }
+  }
 
-    /* AGE */
+  /* GENDER */
 
-    const ageMatch =
-      input.match(
-        /(?:age|years old|வயது|வயசு)\s*(?:is|=|:)?\s*(\d{1,3})/i
-      );
+  if (
+    /\b(male|man|boy)\b/i.test(input) ||
+    input.includes("ஆண்") ||
+    /^(மேல்|மால்|மேன்|மெல்|மாலே)$/.test(input.trim())
+  ) {
+    result.gender = "male";
+  }
 
-    if (ageMatch) {
-      result.age =
-        Number(ageMatch[1]);
-    }
+  if (
+    /\b(female|woman|girl)\b/i.test(input) ||
+    input.includes("பெண்")
+  ) {
+    result.gender = "female";
+  }
 
-    if (
-      result.age === undefined &&
-      currentField === "age"
-    ) {
-      const n =
-        input.match(
-          /\b(\d{1,3})\b/
-        );
+  if (
+    !result.gender &&
+    currentField === "gender"
+  ) {
+    const lower =
+      input.toLowerCase();
 
-      if (n) {
-        const age =
-          Number(n[1]);
-
-        if (
-          age >= 15 &&
-          age <= 80
-        ) {
-          result.age = age;
-        }
-      }
-    }
-
-    /* GENDER */
-
-    if (
-      /\b(male|man|boy)\b/i.test(input) ||
-      input.includes("ஆண்") ||
-      /^(மேல்|மால்|மேன்|மெல்|மாலே)$/.test(input.trim())
-    ) {
+    if (lower === "m") {
       result.gender = "male";
     }
 
-    if (
-      /\b(female|woman|girl)\b/i.test(input) ||
-      input.includes("பெண்")
-    ) {
+    if (lower === "f") {
       result.gender = "female";
     }
-
-    if (
-      !result.gender &&
-      currentField === "gender"
-    ) {
-      const lower =
-        input.toLowerCase();
-
-      if (lower === "m") {
-        result.gender = "male";
-      }
-
-      if (lower === "f") {
-        result.gender = "female";
-      }
-    }
-
-    /* ADDRESS */
-
-    const addressMatch =
-      input.match(
-        /(?:my address is|address is|i live in|i am from|living in|என் முகவரி|நான் வசிப்பது)\s+(.+)/i
-      );
-
-    if (addressMatch) {
-      result.address =
-        cleanText(
-          addressMatch[1]
-        );
-    }
-
-    if (
-      !result.address &&
-      currentField === "address"
-    ) {
-      result.address =
-        cleanText(input);
-    }
-
-    /* EDUCATION */
-
-    const educationMatch =
-      input.match(
-        /(?:education|qualification|qualified|படிப்பு|கல்வித் தகுதி)\s*(?:is|=|:)?\s*(.+)/i
-      );
-
-    if (educationMatch) {
-      result.education =
-        cleanText(
-          educationMatch[1]
-        );
-    }
-
-    const degreeMatch =
-      input.match(
-        /\b(B\.?\s*Tech|B\.?\s*E|B\.?\s*Sc|BCA|MCA|M\.?\s*Tech|M\.?\s*E|MBA|Diploma|ITI|10th|12th|HSC|SSLC)(?:[A-Za-z0-9 &./-]*)/i
-      );
-
-    if (degreeMatch) {
-      result.education =
-        cleanText(
-          degreeMatch[0]
-        );
-    }
-
-    if (
-      !result.education &&
-      currentField === "education"
-    ) {
-      result.education =
-        cleanText(input);
-    }
-
-    /* EXPERIENCE */
-
-    const normalizedExperience =
-      input
-        .toLowerCase()
-        .replace(/[.?!]+$/, "")
-        .trim();
-
-    const zeroExperience =
-      /^(0|zero|none|no|nil|fresher|freshers|no experience|no work experience|ஜீரோ|சீரோ|ஜீரோ வருடம்|சீரோ வருடம்|அனுபவம் இல்லை)$/i
-        .test(
-          normalizedExperience
-        ) ||
-      input.includes("அனுபவம் இல்லை") ||
-      input.includes("ஜீரோ") ||
-      input.includes("சீரோ") ||
-      input.includes("பூஜ்ஜியம்") ||
-      input.includes("பூஜ்யம்");
-
-    if (
-      currentField ===
-        "experience_years" &&
-      zeroExperience
-    ) {
-      result.experience_years = 0;
-    } else {
-      const experienceMatch =
-        input.match(
-          /(\d+(?:\.\d+)?)\s*(?:years?|yrs?|வருடம்|வருடங்கள்)\s*(?:of)?\s*(?:work\s*)?(?:experience)?/i
-        );
-
-      if (experienceMatch) {
-        result.experience_years =
-          Number(
-            experienceMatch[1]
-          );
-      } else if (
-        currentField ===
-        "experience_years"
-      ) {
-        const n =
-          input.match(
-            /\b(\d+(?:\.\d+)?)\b/
-          );
-
-        if (n) {
-          result.experience_years =
-            Number(n[1]);
-        }
-      }
-    }
-
-    /* PREVIOUS COMPANY */
-
-    const companyMatch =
-      input.match(
-        /(?:previous company|previous organisation|previous organization|worked at|worked in|company name|முந்தைய நிறுவனம்)\s*(?:is|=|:)?\s*(.+)/i
-      );
-
-    if (companyMatch) {
-      result.previous_company =
-        cleanText(
-          companyMatch[1]
-        );
-    }
-
-    if (
-      !result.previous_company &&
-      currentField ===
-        "previous_company"
-    ) {
-      result.previous_company =
-        cleanText(input);
-    }
-
-    return result;
   }
 
-  function mergeDetails(
-    current: CandidateDetails,
-    detected: Partial<CandidateDetails>
+  /* ADDRESS */
+
+  const addressMatch =
+    input.match(
+      /(?:my address is|address is|i live in|i am from|living in|என் முகவரி|நான் வசிப்பது)\s+(.+)/i
+    );
+
+  if (addressMatch) {
+    result.address =
+      cleanText(
+        addressMatch[1]
+      );
+  }
+
+  if (
+    !result.address &&
+    currentField === "address"
   ) {
-    const merged: CandidateDetails = {
-      ...current,
-    };
+    result.address =
+      cleanText(input);
+  }
 
-    for (const key of Object.keys(
-      detected
-    )) {
-      const value =
-        detected[
-          key as keyof CandidateDetails
-        ];
+  /* EDUCATION */
 
-      if (
-        value !== null &&
-        value !== undefined &&
-        String(value).trim() !== ""
-      ) {
-        (
-          merged[
-            key as keyof CandidateDetails
-          ] as any
-        ) = value;
+  const educationMatch =
+    input.match(
+      /(?:education|qualification|qualified|படிப்பு|கல்வித் தகுதி)\s*(?:is|=|:)?\s*(.+)/i
+    );
+
+  if (educationMatch) {
+    result.education =
+      cleanText(
+        educationMatch[1]
+      );
+  }
+
+  const degreeMatch =
+    input.match(
+      /\b(B\.?\s*Tech|B\.?\s*E|B\.?\s*Sc|BCA|MCA|M\.?\s*Tech|M\.?\s*E|MBA|Diploma|ITI|10th|12th|HSC|SSLC)(?:[A-Za-z0-9 &./-]*)/i
+    );
+
+  if (degreeMatch) {
+    result.education =
+      cleanText(
+        degreeMatch[0]
+      );
+  }
+
+  if (
+    !result.education &&
+    currentField === "education"
+  ) {
+    result.education =
+      cleanText(input);
+  }
+
+  /* EXPERIENCE */
+
+  const normalizedExperience =
+    input
+      .toLowerCase()
+      .replace(/[.?!]+$/, "")
+      .trim();
+
+  const zeroExperience =
+    /^(0|zero|none|no|nil|fresher|freshers|no experience|no work experience|ஜீரோ|சீரோ|ஜீரோ வருடம்|சீரோ வருடம்|அனுபவம் இல்லை)$/i
+      .test(
+        normalizedExperience
+      ) ||
+    input.includes("அனுபவம் இல்லை") ||
+    input.includes("ஜீரோ") ||
+    input.includes("சீரோ") ||
+    input.includes("பூஜ்ஜியம்") ||
+    input.includes("பூஜ்யம்");
+
+  if (
+    currentField ===
+    "experience_years" &&
+    zeroExperience
+  ) {
+    result.experience_years = 0;
+  } else {
+    const experienceMatch =
+      input.match(
+        /(\d+(?:\.\d+)?)\s*(?:years?|yrs?|வருடம்|வருடங்கள்)\s*(?:of)?\s*(?:work\s*)?(?:experience)?/i
+      );
+
+    if (experienceMatch) {
+      result.experience_years =
+        Number(
+          experienceMatch[1]
+        );
+    } else if (
+      currentField ===
+      "experience_years"
+    ) {
+      const n =
+        input.match(
+          /\b(\d+(?:\.\d+)?)\b/
+        );
+
+      if (n) {
+        result.experience_years =
+          Number(n[1]);
       }
     }
+  }
+
+  /* PREVIOUS COMPANY */
+
+  const companyMatch =
+    input.match(
+      /(?:previous company|previous organisation|previous organization|worked at|worked in|company name|முந்தைய நிறுவனம்)\s*(?:is|=|:)?\s*(.+)/i
+    );
+
+  if (companyMatch) {
+    result.previous_company =
+      cleanText(
+        companyMatch[1]
+      );
+  }
+
+  if (
+    !result.previous_company &&
+    currentField ===
+    "previous_company"
+  ) {
+    result.previous_company =
+      cleanText(input);
+  }
+
+  return result;
+}
+
+function mergeDetails(
+  current: CandidateDetails,
+  detected: Partial<CandidateDetails>
+) {
+  const merged: CandidateDetails = {
+    ...current,
+  };
+
+  for (const key of Object.keys(
+    detected
+  )) {
+    const value =
+      detected[
+      key as keyof CandidateDetails
+      ];
 
     if (
-      merged.experience_years === 0
+      value !== null &&
+      value !== undefined &&
+      String(value).trim() !== ""
     ) {
-      merged.previous_company =
+      (
+        merged[
+        key as keyof CandidateDetails
+        ] as any
+      ) = value;
+    }
+  }
+
+  if (
+    merged.experience_years === 0
+  ) {
+    merged.previous_company =
+      null;
+  }
+
+  return merged;
+}
+
+/* =========================================================
+   ANSWER SUBMIT
+========================================================= */
+
+async function handleAnswerSubmit(
+  submittedAnswer?: string,
+  mode: "text" | "voice" = answerMode
+) {
+  const text =
+    (
+      submittedAnswer ??
+      answer
+    ).trim();
+
+  if (
+    !text ||
+    processingAnswerRef.current ||
+    saving
+  ) {
+    return;
+  }
+
+  const currentCandidate =
+    candidateRef.current;
+
+  const currentField =
+    currentFieldRef.current ??
+    getNextRequiredConversationField(
+      currentCandidate
+    );
+
+  if (!currentField) {
+    return;
+  }
+
+  processingAnswerRef.current =
+    true;
+
+  try {
+    setSaving(true);
+    setError("");
+
+    stopListening();
+
+    addCandidateMessage(
+      text,
+      mode
+    );
+
+    const detected =
+      extractDetails(
+        text,
+        currentField
+      );
+
+    const updatedCandidate =
+      mergeDetails(
+        currentCandidate,
+        detected
+      );
+
+    if (
+      currentField ===
+      "experience_years" &&
+      detected.experience_years === 0
+    ) {
+      updatedCandidate.experience_years =
+        0;
+
+      updatedCandidate.previous_company =
         null;
     }
 
-    return merged;
-  }
+    setCandidate(
+      updatedCandidate
+    );
 
-  /* =========================================================
-     ANSWER SUBMIT
-  ========================================================= */
+    candidateRef.current =
+      updatedCandidate;
 
-  async function handleAnswerSubmit(
-    submittedAnswer?: string,
-    mode: "text" | "voice" = answerMode
-  ) {
-    const text =
-      (
-        submittedAnswer ??
-        answer
-      ).trim();
+    setAnswer("");
+    setAnswerMode("text");
 
-    if (
-      !text ||
-      processingAnswerRef.current ||
-      saving
-    ) {
-      return;
-    }
+    await saveDetectedDetails(
+      currentCandidate,
+      updatedCandidate,
+      mode
+    );
 
-    const currentCandidate =
-      candidateRef.current;
-
-    const currentField =
-      currentFieldRef.current ??
+    const nextField =
       getNextRequiredConversationField(
-        currentCandidate
-      );
-
-    if (!currentField) {
-      return;
-    }
-
-    processingAnswerRef.current =
-      true;
-
-    try {
-      setSaving(true);
-      setError("");
-
-      stopListening();
-
-      addCandidateMessage(
-        text,
-        mode
-      );
-
-      const detected =
-        extractDetails(
-          text,
-          currentField
-        );
-
-      const updatedCandidate =
-        mergeDetails(
-          currentCandidate,
-          detected
-        );
-
-      if (
-        currentField ===
-          "experience_years" &&
-        detected.experience_years === 0
-      ) {
-        updatedCandidate.experience_years =
-          0;
-
-        updatedCandidate.previous_company =
-          null;
-      }
-
-      setCandidate(
         updatedCandidate
       );
 
-      candidateRef.current =
-        updatedCandidate;
-
-      setAnswer("");
-      setAnswerMode("text");
-
-      await saveDetectedDetails(
-        currentCandidate,
-        updatedCandidate,
-        mode
-      );
-
-      const nextField =
-        getNextRequiredConversationField(
-          updatedCandidate
-        );
-
-      if (!nextField) {
-        currentFieldRef.current =
-          null;
-
-        askedFieldRef.current =
-          null;
-
-        await finishConversation();
-        return;
-      }
-
+    if (!nextField) {
       currentFieldRef.current =
-        nextField;
+        null;
 
       askedFieldRef.current =
         null;
 
-      // The next question must be allowed to start its automatic microphone.
-      // Clear the processing lock before askNextMissingField() calls startListening().
-      processingAnswerRef.current = false;
-      setSaving(false);
-
-      await askNextMissingField(
-        updatedCandidate
-      );
-    } catch (err) {
-      console.error(err);
-
-      setError(
-        "Answer save panna problem vandhuduchu. Please try again."
-      );
-    } finally {
-      setSaving(false);
-      processingAnswerRef.current =
-        false;
+      await finishConversation();
+      return;
     }
+
+    currentFieldRef.current =
+      nextField;
+
+    askedFieldRef.current =
+      null;
+
+    // The next question must be allowed to start its automatic microphone.
+    // Clear the processing lock before askNextMissingField() calls startListening().
+    processingAnswerRef.current = false;
+    setSaving(false);
+
+    await askNextMissingField(
+      updatedCandidate
+    );
+  } catch (err) {
+    console.error(err);
+
+    setError(
+      "Answer save panna problem vandhuduchu. Please try again."
+    );
+  } finally {
+    setSaving(false);
+    processingAnswerRef.current =
+      false;
+  }
+}
+
+/* =========================================================
+   FINAL CONTACT
+========================================================= */
+
+async function finishConversation() {
+  stopListening();
+
+  const message =
+    candidateLevel === "workmen"
+      ? "சரி. உங்கள் அடிப்படை விவரங்கள் அனைத்தும் சேகரிக்கப்பட்டுவிட்டன. இப்போது கீழே உங்கள் தொலைபேசி எண், மின்னஞ்சல் மற்றும் இரத்த வகையை உள்ளிடுங்கள்."
+      : "Your basic details are complete. Please enter your phone number and email, and select your blood group below.";
+
+  await addAIMessage(
+    message,
+    candidateLevel
+  );
+
+  setShowFinalContactFields(
+    true
+  );
+}
+
+async function handleFinalContactSubmit() {
+  const phone =
+    (
+      candidate.phone ??
+      ""
+    ).replace(/\D/g, "");
+
+  const email =
+    (
+      candidate.email ??
+      ""
+    ).trim();
+
+  const bloodGroup =
+    (
+      candidate.blood_group ??
+      ""
+    ).trim();
+
+  if (!/^\d{10}$/.test(phone)) {
+    setError(
+      "Phone number must contain exactly 10 digits."
+    );
+    return;
   }
 
-  /* =========================================================
-     FINAL CONTACT
-  ========================================================= */
+  if (!bloodGroup) {
+    setError(
+      "Please select your blood group."
+    );
+    return;
+  }
 
-  async function finishConversation() {
-    stopListening();
+  try {
+    setSaving(true);
+    setError("");
+
+    const updatedCandidate = {
+      ...candidate,
+      phone,
+      email: email || null,
+      blood_group: bloodGroup,
+    };
+
+    await saveDetectedDetails(
+      candidateRef.current,
+      updatedCandidate,
+      "text"
+    );
+
+    candidateRef.current =
+      updatedCandidate;
+
+    setCandidate(
+      updatedCandidate
+    );
+
+    setShowFinalContactFields(
+      false
+    );
 
     const message =
       candidateLevel === "workmen"
-        ? "சரி. உங்கள் அடிப்படை விவரங்கள் அனைத்தும் சேகரிக்கப்பட்டுவிட்டன. இப்போது கீழே உங்கள் தொலைபேசி எண், மின்னஞ்சல் மற்றும் இரத்த வகையை உள்ளிடுங்கள்."
-        : "Your basic details are complete. Please enter your phone number and email, and select your blood group below.";
+        ? "நன்றி. உங்கள் விவரங்கள் அனைத்தும் பெறப்பட்டுவிட்டன. கீழே ஒருமுறை சரிபார்த்து, தவறு இருந்தால் Edit Details மூலம் திருத்தலாம்."
+        : "Thank you. Your details have been collected. Please review the information below.";
 
     await addAIMessage(
       message,
       candidateLevel
     );
 
-    setShowFinalContactFields(
-      true
+    setShowSummary(true);
+  } catch (err) {
+    console.error(err);
+
+    setError(
+      "Contact details save panna mudiyala. Please try again."
+    );
+  } finally {
+    setSaving(false);
+  }
+}
+
+/* =========================================================
+   TTS
+========================================================= */
+
+async function speakText(
+  text: string,
+  level: "staff" | "workmen" =
+    candidateLevel
+) {
+  if (
+    typeof window ===
+    "undefined"
+  ) {
+    return;
+  }
+
+  const clean =
+    text.trim();
+
+  if (!clean) {
+    return;
+  }
+
+  const previousAudio =
+    ttsAudioRef.current;
+
+  if (previousAudio) {
+    previousAudio.pause();
+    previousAudio.currentTime = 0;
+    previousAudio.src = "";
+    ttsAudioRef.current = null;
+  }
+
+  const requestId =
+    ++ttsRequestRef.current;
+
+  try {
+    const voice =
+      level === "workmen"
+        ? "ta-IN-PallaviNeural"
+        : "en-IN-NeerjaNeural";
+
+    const response =
+      await fetch(
+        "https://mill-recruitment-ai-1.onrender.com/tts",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            text: clean,
+            voice,
+          }),
+        }
+      );
+
+    if (!response.ok) {
+      return;
+    }
+
+    const blob =
+      await response.blob();
+
+    const url =
+      URL.createObjectURL(blob);
+
+    if (
+      requestId !==
+      ttsRequestRef.current
+    ) {
+      URL.revokeObjectURL(url);
+      return;
+    }
+
+    const audio =
+      new Audio(url);
+
+    ttsAudioRef.current =
+      audio;
+
+    await new Promise<void>(
+      (resolve) => {
+        let finished = false;
+
+        const done = () => {
+          if (finished) {
+            return;
+          }
+
+          finished = true;
+
+          if (
+            ttsAudioRef.current ===
+            audio
+          ) {
+            ttsAudioRef.current =
+              null;
+          }
+
+          URL.revokeObjectURL(
+            url
+          );
+
+          resolve();
+        };
+
+        audio.onended = done;
+        audio.onerror = done;
+        audio.onabort = done;
+
+        void audio
+          .play()
+          .catch((err) => {
+            console.error(
+              "TTS play blocked:",
+              err
+            );
+
+            done();
+          });
+      }
+    );
+  } catch (err) {
+    console.warn(
+      "TTS unavailable:",
+      err
     );
   }
+}
 
-  async function handleFinalContactSubmit() {
-    const phone =
-      (
-        candidate.phone ??
-        ""
-      ).replace(/\D/g, "");
+/* =========================================================
+   SPEECH RECOGNITION
+========================================================= */
 
-    const email =
-      (
-        candidate.email ??
-        ""
-      ).trim();
-
-    const bloodGroup =
-      (
-        candidate.blood_group ??
-        ""
-      ).trim();
-
-    if (!/^\d{10}$/.test(phone)) {
-      setError(
-        "Phone number must contain exactly 10 digits."
-      );
-      return;
-    }
-
-    if (!bloodGroup) {
-      setError(
-        "Please select your blood group."
-      );
-      return;
-    }
-
-    try {
-      setSaving(true);
-      setError("");
-
-      const updatedCandidate = {
-        ...candidate,
-        phone,
-        email: email || null,
-        blood_group: bloodGroup,
-      };
-
-      await saveDetectedDetails(
-        candidateRef.current,
-        updatedCandidate,
-        "text"
-      );
-
-      candidateRef.current =
-        updatedCandidate;
-
-      setCandidate(
-        updatedCandidate
-      );
-
-      setShowFinalContactFields(
-        false
-      );
-
-      const message =
-        candidateLevel === "workmen"
-          ? "நன்றி. உங்கள் விவரங்கள் அனைத்தும் பெறப்பட்டுவிட்டன. கீழே ஒருமுறை சரிபார்த்து, தவறு இருந்தால் Edit Details மூலம் திருத்தலாம்."
-          : "Thank you. Your details have been collected. Please review the information below.";
-
-      await addAIMessage(
-        message,
-        candidateLevel
-      );
-
-      setShowSummary(true);
-    } catch (err) {
-      console.error(err);
-
-      setError(
-        "Contact details save panna mudiyala. Please try again."
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  /* =========================================================
-     TTS
-  ========================================================= */
-
-  async function speakText(
-    text: string,
-    level: "staff" | "workmen" =
-      candidateLevel
+function startListening() {
+  if (
+    processingAnswerRef.current ||
+    showFinalContactFields ||
+    showSummary ||
+    roundConfirmed
   ) {
-    if (
-      typeof window ===
-      "undefined"
-    ) {
-      return;
-    }
-
-    const clean =
-      text.trim();
-
-    if (!clean) {
-      return;
-    }
-
-    const previousAudio =
-      ttsAudioRef.current;
-
-    if (previousAudio) {
-      previousAudio.pause();
-      previousAudio.currentTime = 0;
-      previousAudio.src = "";
-      ttsAudioRef.current = null;
-    }
-
-    const requestId =
-      ++ttsRequestRef.current;
-
-    try {
-      const voice =
-        level === "workmen"
-          ? "ta-IN-PallaviNeural"
-          : "en-IN-NeerjaNeural";
-
-      const response =
-        await fetch(
-          "https://mill-recruitment-ai-1.onrender.com/tts",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-            body: JSON.stringify({
-              text: clean,
-              voice,
-            }),
-          }
-        );
-
-      if (!response.ok) {
-        return;
-      }
-
-      const blob =
-        await response.blob();
-
-      const url =
-        URL.createObjectURL(blob);
-
-      if (
-        requestId !==
-        ttsRequestRef.current
-      ) {
-        URL.revokeObjectURL(url);
-        return;
-      }
-
-      const audio =
-        new Audio(url);
-
-      ttsAudioRef.current =
-        audio;
-
-      await new Promise<void>(
-        (resolve) => {
-          let finished = false;
-
-          const done = () => {
-            if (finished) {
-              return;
-            }
-
-            finished = true;
-
-            if (
-              ttsAudioRef.current ===
-              audio
-            ) {
-              ttsAudioRef.current =
-                null;
-            }
-
-            URL.revokeObjectURL(
-              url
-            );
-
-            resolve();
-          };
-
-          audio.onended = done;
-          audio.onerror = done;
-          audio.onabort = done;
-
-          void audio
-            .play()
-            .catch((err) => {
-              console.error(
-                "TTS play blocked:",
-                err
-              );
-
-              done();
-            });
-        }
-      );
-    } catch (err) {
-      console.warn(
-        "TTS unavailable:",
-        err
-      );
-    }
+    return;
   }
 
-  /* =========================================================
-     SPEECH RECOGNITION
-  ========================================================= */
+  try {
+    const SpeechRecognition =
+      (window as any)
+        .SpeechRecognition ||
+      (window as any)
+        .webkitSpeechRecognition;
 
-  function startListening() {
-    if (
-      processingAnswerRef.current ||
-      showFinalContactFields ||
-      showSummary ||
-      roundConfirmed
-    ) {
+    if (!SpeechRecognition) {
+      setError(
+        "Browser speech recognition support illa."
+      );
       return;
     }
 
-    try {
-      const SpeechRecognition =
-        (window as any)
-          .SpeechRecognition ||
-        (window as any)
-          .webkitSpeechRecognition;
+    const runId =
+      ++recognitionRunRef.current;
 
-      if (!SpeechRecognition) {
-        setError(
-          "Browser speech recognition support illa."
-        );
-        return;
-      }
+    const recognition =
+      new SpeechRecognition();
 
-      const runId =
-        ++recognitionRunRef.current;
+    recognition.lang =
+      candidateLevel === "workmen"
+        ? "ta-IN"
+        : "en-IN";
 
-      const recognition =
-        new SpeechRecognition();
+    recognition.interimResults =
+      false;
 
-      recognition.lang =
-        candidateLevel === "workmen"
-          ? "ta-IN"
-          : "en-IN";
+    recognition.continuous =
+      false;
 
-      recognition.interimResults =
-        false;
-
-      recognition.continuous =
-        false;
-
-      recognition.maxAlternatives =
-        1;
-
-      recognition.onstart = () => {
-        if (
-          runId ===
-          recognitionRunRef.current
-        ) {
-          setIsListening(true);
-        }
-      };
-
-      recognition.onresult =
-        (event: any) => {
-          if (
-            runId !==
-            recognitionRunRef.current
-          ) {
-            return;
-          }
-
-          const transcript =
-            event.results?.[0]?.[0]
-              ?.transcript ?? "";
-
-          if (!transcript.trim()) {
-            return;
-          }
-
-          setAnswer(transcript);
-          setAnswerMode("voice");
-
-          void handleAnswerSubmit(
-            transcript,
-            "voice"
-          );
-        };
-
-      recognition.onerror =
-        (event: any) => {
-          if (
-            runId !==
-            recognitionRunRef.current
-          ) {
-            return;
-          }
-
-          console.error(
-            "Speech recognition error:",
-            event
-          );
-
-          if (
-            event?.error !==
-              "aborted" &&
-            event?.error !==
-              "no-speech"
-          ) {
-            setError(
-              "Voice answer capture panna mudiyala."
-            );
-          }
-        };
-
-      recognition.onend = () => {
-        if (
-          runId ===
-          recognitionRunRef.current
-        ) {
-          setIsListening(false);
-        }
-      };
-
-      recognitionRef.current =
-        recognition;
-
-      recognition.start();
-    } catch (err) {
-      console.error(err);
-      setIsListening(false);
-    }
-  }
-
-  function stopListening() {
-    recognitionRunRef.current +=
+    recognition.maxAlternatives =
       1;
 
-    try {
-      recognitionRef.current?.stop();
-    } catch {
-      // ignore
-    }
+    recognition.onstart = () => {
+      if (
+        runId ===
+        recognitionRunRef.current
+      ) {
+        setIsListening(true);
+      }
+    };
+
+    recognition.onresult =
+      (event: any) => {
+        if (
+          runId !==
+          recognitionRunRef.current
+        ) {
+          return;
+        }
+
+        const transcript =
+          event.results?.[0]?.[0]
+            ?.transcript ?? "";
+
+        if (!transcript.trim()) {
+          return;
+        }
+
+        setAnswer(transcript);
+        setAnswerMode("voice");
+
+        void handleAnswerSubmit(
+          transcript,
+          "voice"
+        );
+      };
+
+    recognition.onerror =
+      (event: any) => {
+        if (
+          runId !==
+          recognitionRunRef.current
+        ) {
+          return;
+        }
+
+        console.error(
+          "Speech recognition error:",
+          event
+        );
+
+        if (
+          event?.error !==
+          "aborted" &&
+          event?.error !==
+          "no-speech"
+        ) {
+          setError(
+            "Voice answer capture panna mudiyala."
+          );
+        }
+      };
+
+    recognition.onend = () => {
+      if (
+        runId ===
+        recognitionRunRef.current
+      ) {
+        setIsListening(false);
+      }
+    };
 
     recognitionRef.current =
-      null;
+      recognition;
 
+    recognition.start();
+  } catch (err) {
+    console.error(err);
     setIsListening(false);
   }
+}
 
-  /* =========================================================
-     CAMERA
-  ========================================================= */
+function stopListening() {
+  recognitionRunRef.current +=
+    1;
 
-  async function startCamera() {
-    try {
-      setError("");
-
-      if (
-        !navigator.mediaDevices?.getUserMedia
-      ) {
-        setError(
-          "Camera support illa. Upload Photo option use pannunga."
-        );
-        return;
-      }
-
-      const stream =
-        await navigator.mediaDevices.getUserMedia(
-          {
-            video: {
-              facingMode: "user",
-            },
-            audio: false,
-          }
-        );
-
-      cameraStreamRef.current =
-        stream;
-
-      setCameraReady(true);
-
-      if (cameraVideoRef.current) {
-        cameraVideoRef.current.srcObject =
-          stream;
-
-        await cameraVideoRef.current.play();
-      }
-    } catch (err) {
-      console.error(err);
-
-      setError(
-        "Camera permission allow pannunga, illa Upload Photo use pannunga."
-      );
-    }
+  try {
+    recognitionRef.current?.stop();
+  } catch {
+    // ignore
   }
 
-  function stopCamera() {
-    cameraStreamRef.current
-      ?.getTracks()
-      .forEach((track) =>
-        track.stop()
+  recognitionRef.current =
+    null;
+
+  setIsListening(false);
+}
+
+/* =========================================================
+   CAMERA
+========================================================= */
+
+async function startCamera() {
+  try {
+    setError("");
+
+    if (
+      !navigator.mediaDevices?.getUserMedia
+    ) {
+      setError(
+        "Camera support illa. Upload Photo option use pannunga."
+      );
+      return;
+    }
+
+    const stream =
+      await navigator.mediaDevices.getUserMedia(
+        {
+          video: {
+            facingMode: "user",
+          },
+          audio: false,
+        }
       );
 
     cameraStreamRef.current =
-      null;
+      stream;
 
-    setCameraReady(false);
+    setCameraReady(true);
 
     if (cameraVideoRef.current) {
       cameraVideoRef.current.srcObject =
-        null;
+        stream;
+
+      await cameraVideoRef.current.play();
     }
-  }
+  } catch (err) {
+    console.error(err);
 
-  function dataUrlToFile(
-    dataUrl: string
-  ) {
-    const arr =
-      dataUrl.split(",");
-
-    const mime =
-      arr[0].match(
-        /:(.*?);/
-      )?.[1] ??
-      "image/jpeg";
-
-    const bstr =
-      atob(arr[1]);
-
-    let n = bstr.length;
-
-    const u8arr =
-      new Uint8Array(n);
-
-    while (n--) {
-      u8arr[n] =
-        bstr.charCodeAt(n);
-    }
-
-    return new File(
-      [u8arr],
-      "candidate-photo.jpg",
-      {
-        type: mime,
-      }
+    setError(
+      "Camera permission allow pannunga, illa Upload Photo use pannunga."
     );
   }
+}
 
-  function capturePhoto() {
-    const video =
-      cameraVideoRef.current;
-
-    if (
-      !video ||
-      video.videoWidth === 0
-    ) {
-      setError(
-        "Camera ready illa. Konjam wait panni try pannunga."
-      );
-      return;
-    }
-
-    const canvas =
-      document.createElement(
-        "canvas"
-      );
-
-    canvas.width =
-      video.videoWidth;
-
-    canvas.height =
-      video.videoHeight;
-
-    const context =
-      canvas.getContext("2d");
-
-    if (!context) {
-      return;
-    }
-
-    context.drawImage(
-      video,
-      0,
-      0,
-      canvas.width,
-      canvas.height
+function stopCamera() {
+  cameraStreamRef.current
+    ?.getTracks()
+    .forEach((track) =>
+      track.stop()
     );
 
-    const dataUrl =
-      canvas.toDataURL(
-        "image/jpeg",
-        0.82
-      );
+  cameraStreamRef.current =
+    null;
 
-    setPhotoPreview(dataUrl);
+  setCameraReady(false);
 
-    pendingPhotoRef.current =
-      dataUrlToFile(dataUrl);
+  if (cameraVideoRef.current) {
+    cameraVideoRef.current.srcObject =
+      null;
+  }
+}
 
-    stopCamera();
+function dataUrlToFile(
+  dataUrl: string
+) {
+  const arr =
+    dataUrl.split(",");
+
+  const mime =
+    arr[0].match(
+      /:(.*?);/
+    )?.[1] ??
+    "image/jpeg";
+
+  const bstr =
+    atob(arr[1]);
+
+  let n = bstr.length;
+
+  const u8arr =
+    new Uint8Array(n);
+
+  while (n--) {
+    u8arr[n] =
+      bstr.charCodeAt(n);
   }
 
-  async function confirmPhoto() {
-    if (
-      !photoPreview ||
-      photoUploading
-    ) {
-      return;
+  return new File(
+    [u8arr],
+    "candidate-photo.jpg",
+    {
+      type: mime,
     }
+  );
+}
 
-    try {
-      setPhotoUploading(true);
-      setError("");
+function capturePhoto() {
+  const video =
+    cameraVideoRef.current;
 
-      /*
-        Candidate doesn't exist yet.
-        So keep photo locally and upload after
-        candidate is created.
-      */
-
-      if (
-        !pendingPhotoRef.current
-      ) {
-        pendingPhotoRef.current =
-          dataUrlToFile(
-            photoPreview
-          );
-      }
-
-      const updatedCandidate =
-        {
-          ...candidateRef.current,
-          photo_url:
-            photoPreview,
-        };
-
-      candidateRef.current =
-        updatedCandidate;
-
-      setCandidate(
-        updatedCandidate
-      );
-
-      setShowPhotoCapture(
-        false
-      );
-
-      await startConversation(
-        candidateLevel,
-        updatedCandidate
-      );
-    } catch (err) {
-      console.error(err);
-
-      setError(
-        "Photo save panna mudiyala."
-      );
-    } finally {
-      setPhotoUploading(false);
-    }
-  }
-
-  function handlePhotoFile(
-    event: ChangeEvent<HTMLInputElement>
+  if (
+    !video ||
+    video.videoWidth === 0
   ) {
-    const file =
-      event.target.files?.[0];
+    setError(
+      "Camera ready illa. Konjam wait panni try pannunga."
+    );
+    return;
+  }
 
-    if (!file) {
-      return;
-    }
+  const canvas =
+    document.createElement(
+      "canvas"
+    );
+
+  canvas.width =
+    video.videoWidth;
+
+  canvas.height =
+    video.videoHeight;
+
+  const context =
+    canvas.getContext("2d");
+
+  if (!context) {
+    return;
+  }
+
+  context.drawImage(
+    video,
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
+  const dataUrl =
+    canvas.toDataURL(
+      "image/jpeg",
+      0.82
+    );
+
+  setPhotoPreview(dataUrl);
+
+  pendingPhotoRef.current =
+    dataUrlToFile(dataUrl);
+
+  stopCamera();
+}
+
+async function confirmPhoto() {
+  if (
+    !photoPreview ||
+    photoUploading
+  ) {
+    return;
+  }
+
+  try {
+    setPhotoUploading(true);
+    setError("");
+
+    /*
+      Candidate doesn't exist yet.
+      So keep photo locally and upload after
+      candidate is created.
+    */
 
     if (
-      !file.type.startsWith(
-        "image/"
-      )
+      !pendingPhotoRef.current
     ) {
-      setError(
-        "JPG / PNG image mattum upload pannunga."
-      );
-      return;
+      pendingPhotoRef.current =
+        dataUrlToFile(
+          photoPreview
+        );
     }
 
-    pendingPhotoRef.current =
-      file;
-
-    const reader =
-      new FileReader();
-
-    reader.onload = () => {
-      setPhotoPreview(
-        String(
-          reader.result
-        )
-      );
-
-      stopCamera();
+    const updatedCandidate =
+    {
+      ...candidateRef.current,
+      photo_url:
+        photoPreview,
     };
 
-    reader.readAsDataURL(file);
-  }
+    candidateRef.current =
+      updatedCandidate;
 
-  /* =========================================================
-     EDIT
-  ========================================================= */
-
-  function openEdit() {
-    setEditForm({
-      ...candidate,
-    });
-
-    setShowEdit(true);
-  }
-
-  async function handleEditSave() {
-    if (
-      !editForm.full_name.trim()
-    ) {
-      setError(
-        "Name required."
-      );
-      return;
-    }
-
-    const candidateId =
-      candidateIdRef.current;
-
-    if (!candidateId) {
-      setError(
-        "Candidate session is not ready."
-      );
-      return;
-    }
-
-    try {
-      setSaving(true);
-      setError("");
-
-      const updated = {
-        ...editForm,
-
-        full_name:
-          editForm.full_name.trim(),
-
-        previous_company:
-          editForm.experience_years ===
-          0
-            ? null
-            : editForm.previous_company,
-      };
-
-      await updateCandidate(
-        candidateId,
-        {
-          fullName:
-            updated.full_name,
-
-          age:
-            updated.age,
-
-          gender:
-            updated.gender,
-
-          bloodGroup:
-            updated.blood_group,
-
-          phone:
-            updated.phone,
-
-          email:
-            updated.email,
-
-          address:
-            updated.address,
-
-          education:
-            updated.education,
-
-          experienceYears:
-            updated.experience_years,
-
-          previousCompany:
-            updated.previous_company,
-
-          candidateLevel:
-            updated.candidate_level,
-        }
-      );
-
-      setCandidate(updated);
-
-      candidateRef.current =
-        updated;
-
-      setShowEdit(false);
-
-      await addAIMessage(
-        candidateLevel ===
-          "workmen"
-          ? "Unga details successfully update panniyachu."
-          : "Your details have been updated successfully."
-      );
-    } catch (err) {
-      console.error(err);
-
-      setError(
-        "Details update panna mudiyala."
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  /* =========================================================
-     CONFIRM ROUND 1
-  ========================================================= */
-
-  async function handleConfirm() {
-    if (
-      confirming ||
-      roundConfirmed
-    ) {
-      return;
-    }
-
-    const candidateId =
-      candidateIdRef.current;
-
-    const interviewId =
-      interviewIdRef.current;
-
-    const roundId =
-      roundIdRef.current;
-
-    if (
-      !candidateId ||
-      !interviewId ||
-      !roundId
-    ) {
-      setError(
-        "Interview session is not ready."
-      );
-      return;
-    }
-
-    try {
-      setConfirming(true);
-      setError("");
-
-      const result =
-        await confirmRoundOne({
-          candidateId,
-          interviewId,
-          roundId,
-        });
-
-      setRoundConfirmed(true);
-
-      const nextRound =
-        result?.data?.nextRound ??
-        result?.nextRound;
-
-      await addAIMessage(
-        candidateLevel ===
-          "workmen"
-          ? "நன்றி. உங்கள் அடிப்படை விவரங்கள் உறுதிப்படுத்தப்பட்டுவிட்டன. Round 1 முடிந்துவிட்டது. தயவுசெய்து சிறிது நேரம் காத்திருக்கவும்."
-          : "Thank you. Your basic details have been confirmed. Round 1 is complete. Please wait for the next stage."
-      );
-
-      console.log(
-        "Next round:",
-        nextRound
-      );
-    } catch (err: any) {
-      console.error(err);
-
-      setError(
-        err?.message ??
-          "Round 1 confirm panna mudiyala."
-      );
-    } finally {
-      setConfirming(false);
-    }
-  }
-
-  /* =========================================================
-     DISPLAY HELPERS
-  ========================================================= */
-
-  function formatExperience(
-    value: number | null
-  ) {
-    if (
-      value === null ||
-      value === undefined
-    ) {
-      return "—";
-    }
-
-    if (value === 0) {
-      return "Fresher";
-    }
-
-    return `${value} year${
-      value === 1 ? "" : "s"
-    }`;
-  }
-
-  function displayValue(
-    value: unknown
-  ) {
-    return hasValue(value)
-      ? String(value)
-      : "—";
-  }
-
-  /* =========================================================
-     LOADING
-  ========================================================= */
-
-  if (loading) {
-    return (
-      <div style={styles.page}>
-        <div
-          style={styles.loadingCard}
-        >
-          <div
-            style={styles.loadingIcon}
-          >
-            RM
-          </div>
-
-          <h2
-            style={styles.loadingTitle}
-          >
-            Loading Interview
-          </h2>
-
-          <p
-            style={styles.loadingText}
-          >
-            Rajapalayam Mills AI
-            Interview prepare
-            pannitu irukku...
-          </p>
-        </div>
-      </div>
+    setCandidate(
+      updatedCandidate
     );
+
+    setShowPhotoCapture(
+      false
+    );
+
+    await startConversation(
+      candidateLevel,
+      updatedCandidate
+    );
+  } catch (err) {
+    console.error(err);
+
+    setError(
+      "Photo save panna mudiyala."
+    );
+  } finally {
+    setPhotoUploading(false);
+  }
+}
+
+function handlePhotoFile(
+  event: ChangeEvent<HTMLInputElement>
+) {
+  const file =
+    event.target.files?.[0];
+
+  if (!file) {
+    return;
   }
 
-  /* =========================================================
-     UI
-  ========================================================= */
+  if (
+    !file.type.startsWith(
+      "image/"
+    )
+  ) {
+    setError(
+      "JPG / PNG image mattum upload pannunga."
+    );
+    return;
+  }
 
+  pendingPhotoRef.current =
+    file;
+
+  const reader =
+    new FileReader();
+
+  reader.onload = () => {
+    setPhotoPreview(
+      String(
+        reader.result
+      )
+    );
+
+    stopCamera();
+  };
+
+  reader.readAsDataURL(file);
+}
+
+/* =========================================================
+   EDIT
+========================================================= */
+
+function openEdit() {
+  setEditForm({
+    ...candidate,
+  });
+
+  setShowEdit(true);
+}
+
+async function handleEditSave() {
+  if (
+    !editForm.full_name.trim()
+  ) {
+    setError(
+      "Name required."
+    );
+    return;
+  }
+
+  const candidateId =
+    candidateIdRef.current;
+
+  if (!candidateId) {
+    setError(
+      "Candidate session is not ready."
+    );
+    return;
+  }
+
+  try {
+    setSaving(true);
+    setError("");
+
+    const updated = {
+      ...editForm,
+
+      full_name:
+        editForm.full_name.trim(),
+
+      previous_company:
+        editForm.experience_years ===
+          0
+          ? null
+          : editForm.previous_company,
+    };
+
+    await updateCandidate(
+      candidateId,
+      {
+        fullName:
+          updated.full_name,
+
+        age:
+          updated.age,
+
+        gender:
+          updated.gender,
+
+        bloodGroup:
+          updated.blood_group,
+
+        phone:
+          updated.phone,
+
+        email:
+          updated.email,
+
+        address:
+          updated.address,
+
+        education:
+          updated.education,
+
+        experienceYears:
+          updated.experience_years,
+
+        previousCompany:
+          updated.previous_company,
+
+        candidateLevel:
+          updated.candidate_level,
+      }
+    );
+
+    setCandidate(updated);
+
+    candidateRef.current =
+      updated;
+
+    setShowEdit(false);
+
+    await addAIMessage(
+      candidateLevel ===
+        "workmen"
+        ? "Unga details successfully update panniyachu."
+        : "Your details have been updated successfully."
+    );
+  } catch (err) {
+    console.error(err);
+
+    setError(
+      "Details update panna mudiyala."
+    );
+  } finally {
+    setSaving(false);
+  }
+}
+
+/* =========================================================
+   CONFIRM ROUND 1
+========================================================= */
+
+async function handleConfirm() {
+  if (
+    confirming ||
+    roundConfirmed
+  ) {
+    return;
+  }
+
+  const candidateId =
+    candidateIdRef.current;
+
+  const interviewId =
+    interviewIdRef.current;
+
+  const roundId =
+    roundIdRef.current;
+
+  if (
+    !candidateId ||
+    !interviewId ||
+    !roundId
+  ) {
+    setError(
+      "Interview session is not ready."
+    );
+    return;
+  }
+
+  try {
+    setConfirming(true);
+    setError("");
+
+    const result =
+      await confirmRoundOne({
+        candidateId,
+        interviewId,
+        roundId,
+      });
+
+    setRoundConfirmed(true);
+
+    const nextRound =
+      result?.data?.nextRound ??
+      result?.nextRound;
+
+    await addAIMessage(
+      candidateLevel ===
+        "workmen"
+        ? "நன்றி. உங்கள் அடிப்படை விவரங்கள் உறுதிப்படுத்தப்பட்டுவிட்டன. Round 1 முடிந்துவிட்டது. தயவுசெய்து சிறிது நேரம் காத்திருக்கவும்."
+        : "Thank you. Your basic details have been confirmed. Round 1 is complete. Please wait for the next stage."
+    );
+
+    console.log(
+      "Next round:",
+      nextRound
+    );
+  } catch (err: any) {
+    console.error(err);
+
+    setError(
+      err?.message ??
+      "Round 1 confirm panna mudiyala."
+    );
+  } finally {
+    setConfirming(false);
+  }
+}
+
+/* =========================================================
+   DISPLAY HELPERS
+========================================================= */
+
+function formatExperience(
+  value: number | null
+) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return "—";
+  }
+
+  if (value === 0) {
+    return "Fresher";
+  }
+
+  return `${value} year${value === 1 ? "" : "s"
+    }`;
+}
+
+function displayValue(
+  value: unknown
+) {
+  return hasValue(value)
+    ? String(value)
+    : "—";
+}
+
+/* =========================================================
+   LOADING
+========================================================= */
+
+if (loading) {
   return (
     <div style={styles.page}>
-      <div style={styles.container}>
+      <div
+        style={styles.loadingCard}
+      >
+        <div
+          style={styles.loadingIcon}
+        >
+          RM
+        </div>
 
-        {/* =================================================
+        <h2
+          style={styles.loadingTitle}
+        >
+          Loading Interview
+        </h2>
+
+        <p
+          style={styles.loadingText}
+        >
+          Rajapalayam Mills AI
+          Interview prepare
+          pannitu irukku...
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   UI
+========================================================= */
+
+return (
+  <div style={styles.page}>
+    <div style={styles.container}>
+
+      {/* =================================================
             PHOTO GATE
         ================================================= */}
 
-        {showPhotoCapture ? (
-          <section
-            style={styles.photoGate}
+      {showPhotoCapture ? (
+        <section
+          style={styles.photoGate}
+        >
+          <div
+            style={
+              styles.photoGateBadge
+            }
           >
-            <div
-              style={
-                styles.photoGateBadge
-              }
-            >
-              CANDIDATE VERIFICATION
-            </div>
+            CANDIDATE VERIFICATION
+          </div>
 
-            <h1
-              style={
-                styles.photoGateTitle
-              }
-            >
-              Take your interview
-              photo
-            </h1>
+          <h1
+            style={
+              styles.photoGateTitle
+            }
+          >
+            Take your interview
+            photo
+          </h1>
 
-            <p
-              style={styles.photoGateText}
-            >
-              Interview start
-              pannurathukku
-              munnaadi oru clear
-              photo capture
-              pannunga. HR candidate
-              profile-la indha photo
-              display aagum.
-            </p>
+          <p
+            style={styles.photoGateText}
+          >
+            Interview start
+            pannurathukku
+            munnaadi oru clear
+            photo capture
+            pannunga. HR candidate
+            profile-la indha photo
+            display aagum.
+          </p>
 
-            <div
-              style={styles.cameraFrame}
-            >
-              {photoPreview ? (
-                <img
-                  src={photoPreview}
-                  alt="Candidate preview"
-                  style={
-                    styles.cameraImage
-                  }
-                />
-              ) : (
-                <video
-                  ref={cameraVideoRef}
-                  autoPlay
-                  muted
-                  playsInline
-                  style={
-                    styles.cameraVideo
-                  }
-                />
-              )}
-            </div>
+          <div
+            style={styles.cameraFrame}
+          >
+            {photoPreview ? (
+              <img
+                src={photoPreview}
+                alt="Candidate preview"
+                style={
+                  styles.cameraImage
+                }
+              />
+            ) : (
+              <video
+                ref={cameraVideoRef}
+                autoPlay
+                muted
+                playsInline
+                style={
+                  styles.cameraVideo
+                }
+              />
+            )}
+          </div>
 
-            <div
-              style={styles.photoActions}
-            >
-              {!photoPreview && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    void startCamera()
-                  }
-                  style={
-                    styles.primaryPhotoButton
-                  }
-                >
-                  📷 Open Camera
-                </button>
-              )}
-
-              {!photoPreview &&
-                cameraReady && (
-                  <button
-                    type="button"
-                    onClick={
-                      capturePhoto
-                    }
-                    style={
-                      styles.confirmPhotoButton
-                    }
-                  >
-                    📸 Capture Photo
-                  </button>
-                )}
-
-              {photoPreview && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPhotoPreview(
-                        null
-                      );
-
-                      pendingPhotoRef.current =
-                        null;
-
-                      void startCamera();
-                    }}
-                    style={
-                      styles.editButton
-                    }
-                  >
-                    ↻ Retake
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void confirmPhoto()
-                    }
-                    disabled={
-                      photoUploading
-                    }
-                    style={
-                      styles.confirmButton
-                    }
-                  >
-                    {photoUploading
-                      ? "Preparing..."
-                      : "✓ Continue"}
-                  </button>
-                </>
-              )}
-
+          <div
+            style={styles.photoActions}
+          >
+            {!photoPreview && (
               <button
                 type="button"
                 onClick={() =>
-                  photoInputRef.current?.click()
+                  void startCamera()
                 }
                 style={
-                  styles.uploadPhotoButton
+                  styles.primaryPhotoButton
                 }
               >
-                Upload Photo
+                📷 Open Camera
               </button>
+            )}
 
-              <input
-                ref={photoInputRef}
-                type="file"
-                accept="image/*"
-                capture="user"
-                onChange={
-                  handlePhotoFile
-                }
-                style={{
-                  display: "none",
-                }}
-              />
-            </div>
+            {!photoPreview &&
+              cameraReady && (
+                <button
+                  type="button"
+                  onClick={
+                    capturePhoto
+                  }
+                  style={
+                    styles.confirmPhotoButton
+                  }
+                >
+                  📸 Capture Photo
+                </button>
+              )}
 
-            <div
+            {photoPreview && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPhotoPreview(
+                      null
+                    );
+
+                    pendingPhotoRef.current =
+                      null;
+
+                    void startCamera();
+                  }}
+                  style={
+                    styles.editButton
+                  }
+                >
+                  ↻ Retake
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    void confirmPhoto()
+                  }
+                  disabled={
+                    photoUploading
+                  }
+                  style={
+                    styles.confirmButton
+                  }
+                >
+                  {photoUploading
+                    ? "Preparing..."
+                    : "✓ Continue"}
+                </button>
+              </>
+            )}
+
+            <button
+              type="button"
+              onClick={() =>
+                photoInputRef.current?.click()
+              }
               style={
-                styles.photoConsent
+                styles.uploadPhotoButton
               }
             >
-              இந்த புகைப்படம்
-              நேர்காணல் பதிவிற்காக
-              பயன்படுத்தப்படும்.
-            </div>
+              Upload Photo
+            </button>
 
-            {error && (
-              <div
-                style={styles.errorBox}
-              >
-                {error}
-              </div>
-            )}
-          </section>
-        ) : (
-          <>
-            {/* =================================================
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              capture="user"
+              onChange={
+                handlePhotoFile
+              }
+              style={{
+                display: "none",
+              }}
+            />
+          </div>
+
+          <div
+            style={
+              styles.photoConsent
+            }
+          >
+            இந்த புகைப்படம்
+            நேர்காணல் பதிவிற்காக
+            பயன்படுத்தப்படும்.
+          </div>
+
+          {error && (
+            <div
+              style={styles.errorBox}
+            >
+              {error}
+            </div>
+          )}
+        </section>
+      ) : (
+        <>
+          {/* =================================================
                 HEADER
             ================================================= */}
 
-            <header
-              style={styles.header}
-            >
-              <div>
-                <div
-                  style={styles.brand}
-                >
-                  RAJAPALAYAM MILLS
-                </div>
-
-                <div
-                  style={
-                    styles.subBrand
-                  }
-                >
-                  AI RECRUITMENT
-                  INTERVIEW
-                </div>
+          <header
+            style={styles.header}
+          >
+            <div>
+              <div
+                style={styles.brand}
+              >
+                RAJAPALAYAM MILLS
               </div>
 
               <div
                 style={
-                  styles.roundBadge
+                  styles.subBrand
                 }
               >
-                <span
-                  style={
-                    styles.roundBadgeSpan
-                  }
-                >
-                  ROUND 1
-                </span>
-
-                <small>
-                  Basic Information
-                </small>
-              </div>
-            </header>
-
-            {/* =================================================
-                ERROR
-            ================================================= */}
-
-            {error && (
-              <div
-                style={styles.errorBox}
-              >
-                {error}
-              </div>
-            )}
-
-            {/* =================================================
-                START
-            ================================================= */}
-
-            {!interviewStarted &&
-              !roundConfirmed && (
-                <section
-                  style={
-                    styles.startCard
-                  }
-                >
-                  <div
-                    style={
-                      styles.sectionLabel
-                    }
-                  >
-                    READY TO BEGIN
-                  </div>
-
-                  <h2
-                    style={
-                      styles.startTitle
-                    }
-                  >
-                    Start your interview
-                  </h2>
-
-                  <p
-                    style={
-                      styles.summarySubtitle
-                    }
-                  >
-                    Start button press
-                    pannumbodhu welcome
-                    voice first play
-                    aagum. Adhukku apram
-                    AI automatic-ah next
-                    question kekkum.
-                  </p>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void startConversation(
-                        candidateLevel,
-                        candidateRef.current
-                      )
-                    }
-                    style={
-                      styles.confirmButton
-                    }
-                  >
-                    ▶ Start Interview
-                  </button>
-                </section>
-              )}
-
-            {/* =================================================
-                PROGRESS
-            ================================================= */}
-
-            <div
-              style={
-                styles.progressArea
-              }
-            >
-              <div
-                style={
-                  styles.progressTop
-                }
-              >
-                <span>
-                  Basic Information
-                </span>
-
-                <span>
-                  Round 1 of 2
-                </span>
-              </div>
-
-              <div
-                style={
-                  styles.progressTrack
-                }
-              >
-                <div
-                  style={{
-                    ...styles.progressFill,
-                    width:
-                      roundConfirmed
-                        ? "100%"
-                        : showSummary
-                        ? "90%"
-                        : "45%",
-                  }}
-                />
+                AI RECRUITMENT
+                INTERVIEW
               </div>
             </div>
 
-            {/* =================================================
+            <div
+              style={
+                styles.roundBadge
+              }
+            >
+              <span
+                style={
+                  styles.roundBadgeSpan
+                }
+              >
+                ROUND 1
+              </span>
+
+              <small>
+                Basic Information
+              </small>
+            </div>
+          </header>
+
+          {/* =================================================
+                ERROR
+            ================================================= */}
+
+          {error && (
+            <div
+              style={styles.errorBox}
+            >
+              {error}
+            </div>
+          )}
+
+          {/* =================================================
+                START
+            ================================================= */}
+
+          {!interviewStarted &&
+            !roundConfirmed && (
+              <section
+                style={
+                  styles.startCard
+                }
+              >
+                <div
+                  style={
+                    styles.sectionLabel
+                  }
+                >
+                  READY TO BEGIN
+                </div>
+
+                <h2
+                  style={
+                    styles.startTitle
+                  }
+                >
+                  Start your interview
+                </h2>
+
+                <p
+                  style={
+                    styles.summarySubtitle
+                  }
+                >
+                  Start button press
+                  pannumbodhu welcome
+                  voice first play
+                  aagum. Adhukku apram
+                  AI automatic-ah next
+                  question kekkum.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    void startConversation(
+                      candidateLevel,
+                      candidateRef.current
+                    )
+                  }
+                  style={
+                    styles.confirmButton
+                  }
+                >
+                  ▶ Start Interview
+                </button>
+              </section>
+            )}
+
+          {/* =================================================
+                PROGRESS
+            ================================================= */}
+
+          <div
+            style={
+              styles.progressArea
+            }
+          >
+            <div
+              style={
+                styles.progressTop
+              }
+            >
+              <span>
+                Basic Information
+              </span>
+
+              <span>
+                Round 1 of 2
+              </span>
+            </div>
+
+            <div
+              style={
+                styles.progressTrack
+              }
+            >
+              <div
+                style={{
+                  ...styles.progressFill,
+                  width:
+                    roundConfirmed
+                      ? "100%"
+                      : showSummary
+                        ? "90%"
+                        : "45%",
+                }}
+              />
+            </div>
+          </div>
+
+          {/* =================================================
                 CONVERSATION
             ================================================= */}
 
-            {!roundConfirmed &&
-              interviewStarted && (
-                <section
+          {!roundConfirmed &&
+            interviewStarted && (
+              <section
+                style={
+                  styles.conversationCard
+                }
+              >
+                <div
                   style={
-                    styles.conversationCard
+                    styles.conversationHeader
                   }
                 >
-                  <div
-                    style={
-                      styles.conversationHeader
-                    }
-                  >
-                    <div>
-                      <div
-                        style={
-                          styles.sectionLabel
-                        }
-                      >
-                        AI CONVERSATION
-                      </div>
-
-                      <h2
-                        style={
-                          styles.sectionTitle
-                        }
-                      >
-                        Basic Details
-                        Interview
-                      </h2>
-                    </div>
-
+                  <div>
                     <div
                       style={
-                        styles.liveIndicator
+                        styles.sectionLabel
                       }
                     >
-                      <span
-                        style={
-                          styles.liveDot
-                        }
-                      />
-                      LIVE
+                      AI CONVERSATION
                     </div>
+
+                    <h2
+                      style={
+                        styles.sectionTitle
+                      }
+                    >
+                      Basic Details
+                      Interview
+                    </h2>
                   </div>
 
                   <div
                     style={
-                      styles.messages
+                      styles.liveIndicator
                     }
                   >
-                    {messages.map(
-                      (message) => (
+                    <span
+                      style={
+                        styles.liveDot
+                      }
+                    />
+                    LIVE
+                  </div>
+                </div>
+
+                <div
+                  style={
+                    styles.messages
+                  }
+                >
+                  {messages.map(
+                    (message) => (
+                      <div
+                        key={
+                          message.id
+                        }
+                        style={
+                          message.role ===
+                            "ai"
+                            ? styles.aiRow
+                            : styles.candidateRow
+                        }
+                      >
                         <div
-                          key={
-                            message.id
-                          }
                           style={
                             message.role ===
+                              "ai"
+                              ? styles.aiAvatar
+                              : styles.candidateAvatar
+                          }
+                        >
+                          {message.role ===
                             "ai"
-                              ? styles.aiRow
-                              : styles.candidateRow
+                            ? "AI"
+                            : "YOU"}
+                        </div>
+
+                        <div
+                          style={
+                            message.role ===
+                              "ai"
+                              ? styles.aiBubble
+                              : styles.candidateBubble
                           }
                         >
                           <div
                             style={
                               message.role ===
-                              "ai"
-                                ? styles.aiAvatar
-                                : styles.candidateAvatar
+                                "ai"
+                                ? styles.messageRole
+                                : styles.messageRoleCandidate
                             }
                           >
                             {message.role ===
-                            "ai"
-                              ? "AI"
-                              : "YOU"}
+                              "ai"
+                              ? "Rajapalayam Mills AI"
+                              : "Candidate"}
                           </div>
 
                           <div
                             style={
-                              message.role ===
-                              "ai"
-                                ? styles.aiBubble
-                                : styles.candidateBubble
+                              styles.messageText
                             }
                           >
-                            <div
-                              style={
-                                message.role ===
-                                "ai"
-                                  ? styles.messageRole
-                                  : styles.messageRoleCandidate
-                              }
-                            >
-                              {message.role ===
-                              "ai"
-                                ? "Rajapalayam Mills AI"
-                                : "Candidate"}
-                            </div>
+                            {
+                              message.text
+                            }
+                          </div>
 
-                            <div
-                              style={
-                                styles.messageText
-                              }
-                            >
-                              {
-                                message.text
-                              }
-                            </div>
-
-                            {message.mode ===
-                              "voice" && (
+                          {message.mode ===
+                            "voice" && (
                               <div
                                 style={
                                   styles.voiceTag
@@ -2495,343 +2471,322 @@ export default function RoundOne() {
                                 🎙 Voice Answer
                               </div>
                             )}
-                          </div>
                         </div>
-                      )
-                    )}
+                      </div>
+                    )
+                  )}
 
+                  <div
+                    ref={
+                      messagesEndRef
+                    }
+                  />
+                </div>
+
+                {!showSummary &&
+                  !showFinalContactFields && (
                     <div
-                      ref={
-                        messagesEndRef
+                      style={
+                        styles.answerArea
                       }
-                    />
-                  </div>
+                    >
+                      <textarea
+                        value={answer}
+                        onChange={(e) =>
+                          setAnswer(
+                            e.target.value
+                          )
+                        }
+                        onKeyDown={(e) => {
+                          if (
+                            e.key ===
+                            "Enter" &&
+                            !e.shiftKey
+                          ) {
+                            e.preventDefault();
 
-                  {!showSummary &&
-                    !showFinalContactFields && (
+                            void handleAnswerSubmit(
+                              answer,
+                              "text"
+                            );
+                          }
+                        }}
+                        placeholder={
+                          candidateLevel ===
+                            "workmen"
+                            ? "Unga answer-a inga type pannunga..."
+                            : "Type your answer here..."
+                        }
+                        disabled={
+                          saving ||
+                          isListening
+                        }
+                        style={
+                          styles.textarea
+                        }
+                      />
+
                       <div
                         style={
-                          styles.answerArea
+                          styles.answerActions
                         }
                       >
-                        <textarea
-                          value={answer}
-                          onChange={(e) =>
-                            setAnswer(
-                              e.target.value
-                            )
+                        <button
+                          type="button"
+                          onClick={
+                            isListening
+                              ? stopListening
+                              : startListening
                           }
-                          onKeyDown={(e) => {
-                            if (
-                              e.key ===
-                                "Enter" &&
-                              !e.shiftKey
-                            ) {
-                              e.preventDefault();
+                          disabled={
+                            saving
+                          }
+                          style={
+                            isListening
+                              ? styles.stopVoiceButton
+                              : styles.voiceButton
+                          }
+                        >
+                          {isListening
+                            ? "⏹ Stop"
+                            : "🎙 Speak"}
+                        </button>
 
-                              void handleAnswerSubmit(
-                                answer,
-                                "text"
-                              );
-                            }
-                          }}
-                          placeholder={
-                            candidateLevel ===
-                            "workmen"
-                              ? "Unga answer-a inga type pannunga..."
-                              : "Type your answer here..."
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void handleAnswerSubmit(
+                              answer,
+                              "text"
+                            )
                           }
                           disabled={
                             saving ||
-                            isListening
+                            !answer.trim()
                           }
                           style={
-                            styles.textarea
-                          }
-                        />
-
-                        <div
-                          style={
-                            styles.answerActions
+                            styles.sendButton
                           }
                         >
-                          <button
-                            type="button"
-                            onClick={
-                              isListening
-                                ? stopListening
-                                : startListening
-                            }
-                            disabled={
-                              saving
-                            }
-                            style={
-                              isListening
-                                ? styles.stopVoiceButton
-                                : styles.voiceButton
-                            }
-                          >
-                            {isListening
-                              ? "⏹ Stop"
-                              : "🎙 Speak"}
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              void handleAnswerSubmit(
-                                answer,
-                                "text"
-                              )
-                            }
-                            disabled={
-                              saving ||
-                              !answer.trim()
-                            }
-                            style={
-                              styles.sendButton
-                            }
-                          >
-                            {saving
-                              ? "Saving..."
-                              : "Send"}
-                          </button>
-                        </div>
-
-                        {isListening && (
-                          <div
-                            style={
-                              styles.listeningText
-                            }
-                          >
-                            🎙 AI listening...
-                            Speak now.
-                          </div>
-                        )}
+                          {saving
+                            ? "Saving..."
+                            : "Send"}
+                        </button>
                       </div>
-                    )}
-                </section>
-              )}
 
-            {/* =================================================
+                      {isListening && (
+                        <div
+                          style={
+                            styles.listeningText
+                          }
+                        >
+                          🎙 AI listening...
+                          Speak now.
+                        </div>
+                      )}
+                    </div>
+                  )}
+              </section>
+            )}
+
+          {/* =================================================
                 CONTACT
             ================================================= */}
 
-            {showFinalContactFields &&
-              !showSummary && (
-                <section
+          {showFinalContactFields &&
+            !showSummary && (
+              <section
+                style={
+                  styles.finalContactCard
+                }
+              >
+                <div
                   style={
-                    styles.finalContactCard
+                    styles.sectionLabel
                   }
                 >
-                  <div
+                  FINAL BASIC DETAILS
+                </div>
+
+                <h2
+                  style={
+                    styles.sectionTitle
+                  }
+                >
+                  Contact & Blood Group
+                </h2>
+
+                <p
+                  style={
+                    styles.summarySubtitle
+                  }
+                >
+                  Phone and email
+                  typing-la enter
+                  pannunga. Blood group
+                  dropdown-la select
+                  pannunga.
+                </p>
+
+                <div
+                  style={
+                    styles.formGrid
+                  }
+                >
+                  <EditField
+                    label="Phone Number *"
+                    value={
+                      candidate.phone ??
+                      ""
+                    }
+                    onChange={(value) =>
+                      setCandidate({
+                        ...candidate,
+                        phone:
+                          value.replace(
+                            /\D/g,
+                            ""
+                          ).slice(
+                            0,
+                            10
+                          ) || null,
+                      })
+                    }
+                  />
+
+                  <EditField
+                    label="Email"
+                    type="email"
+                    value={
+                      candidate.email ??
+                      ""
+                    }
+                    onChange={(value) =>
+                      setCandidate({
+                        ...candidate,
+                        email:
+                          value ||
+                          null,
+                      })
+                    }
+                  />
+
+                  <EditSelect
+                    label="Blood Group *"
+                    value={
+                      candidate.blood_group ??
+                      ""
+                    }
+                    options={[
+                      "",
+                      "A+",
+                      "A-",
+                      "B+",
+                      "B-",
+                      "AB+",
+                      "AB-",
+                      "O+",
+                      "O-",
+                      "Unknown",
+                    ]}
+                    onChange={(value) =>
+                      setCandidate({
+                        ...candidate,
+                        blood_group:
+                          value ||
+                          null,
+                      })
+                    }
+                  />
+                </div>
+
+                <div
+                  style={
+                    styles.summaryActions
+                  }
+                >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCandidate({
+                        ...candidate,
+                        phone: null,
+                        email: null,
+                        blood_group:
+                          null,
+                      })
+                    }
                     style={
-                      styles.sectionLabel
+                      styles.editButton
                     }
                   >
-                    FINAL BASIC DETAILS
-                  </div>
+                    Clear
+                  </button>
 
-                  <h2
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void handleFinalContactSubmit()
+                    }
+                    disabled={saving}
                     style={
-                      styles.sectionTitle
+                      styles.confirmButton
                     }
                   >
-                    Contact & Blood Group
-                  </h2>
+                    {saving
+                      ? "Saving..."
+                      : "Continue →"}
+                  </button>
+                </div>
+              </section>
+            )}
 
-                  <p
-                    style={
-                      styles.summarySubtitle
-                    }
-                  >
-                    Phone and email
-                    typing-la enter
-                    pannunga. Blood group
-                    dropdown-la select
-                    pannunga.
-                  </p>
-
-                  <div
-                    style={
-                      styles.formGrid
-                    }
-                  >
-                    <EditField
-                      label="Phone Number *"
-                      value={
-                        candidate.phone ??
-                        ""
-                      }
-                      onChange={(value) =>
-                        setCandidate({
-                          ...candidate,
-                          phone:
-                            value.replace(
-                              /\D/g,
-                              ""
-                            ).slice(
-                              0,
-                              10
-                            ) || null,
-                        })
-                      }
-                    />
-
-                    <EditField
-                      label="Email"
-                      type="email"
-                      value={
-                        candidate.email ??
-                        ""
-                      }
-                      onChange={(value) =>
-                        setCandidate({
-                          ...candidate,
-                          email:
-                            value ||
-                            null,
-                        })
-                      }
-                    />
-
-                    <EditSelect
-                      label="Blood Group *"
-                      value={
-                        candidate.blood_group ??
-                        ""
-                      }
-                      options={[
-                        "",
-                        "A+",
-                        "A-",
-                        "B+",
-                        "B-",
-                        "AB+",
-                        "AB-",
-                        "O+",
-                        "O-",
-                        "Unknown",
-                      ]}
-                      onChange={(value) =>
-                        setCandidate({
-                          ...candidate,
-                          blood_group:
-                            value ||
-                            null,
-                        })
-                      }
-                    />
-                  </div>
-
-                  <div
-                    style={
-                      styles.summaryActions
-                    }
-                  >
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setCandidate({
-                          ...candidate,
-                          phone: null,
-                          email: null,
-                          blood_group:
-                            null,
-                        })
-                      }
-                      style={
-                        styles.editButton
-                      }
-                    >
-                      Clear
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        void handleFinalContactSubmit()
-                      }
-                      disabled={saving}
-                      style={
-                        styles.confirmButton
-                      }
-                    >
-                      {saving
-                        ? "Saving..."
-                        : "Continue →"}
-                    </button>
-                  </div>
-                </section>
-              )}
-
-            {/* =================================================
+          {/* =================================================
                 SUMMARY
             ================================================= */}
 
-            {showSummary &&
-              !roundConfirmed && (
-                <section
+          {showSummary &&
+            !roundConfirmed && (
+              <section
+                style={
+                  styles.summaryCard
+                }
+              >
+                <div
                   style={
-                    styles.summaryCard
+                    styles.summaryHeader
                   }
                 >
                   <div
                     style={
-                      styles.summaryHeader
+                      styles.summaryIdentity
                     }
                   >
-                    <div
-                      style={
-                        styles.summaryIdentity
-                      }
-                    >
-                      {candidate.photo_url ||
+                    {candidate.photo_url ||
                       photoPreview ? (
-                        <img
-                          src={
-                            photoPreview ||
-                            (candidate.photo_url
-                              ? candidate.photo_url.startsWith("http")
-                                ? candidate.photo_url
-                                : `http://localhost:5000${candidate.photo_url}`
-                              : "")
-                          }
-                          alt="Candidate"
-                          style={
-                            styles.summaryPhoto
-                          }
-                        />
-                      ) : (
-                        <div
-                          style={
-                            styles.summaryPhotoPlaceholder
-                          }
-                        >
-                          PHOTO
-                        </div>
-                      )}
-
-                      <div>
-                        <div
-                          style={
-                            styles.sectionLabel
-                          }
-                        >
-                          CANDIDATE
-                        </div>
-
-                        <div
-                          style={
-                            styles.summaryName
-                          }
-                        >
-                          {displayValue(
-                            candidate.full_name
-                          )}
-                        </div>
+                      <img
+                        src={
+                          photoPreview ||
+                          (candidate.photo_url
+                            ? candidate.photo_url.startsWith("http")
+                              ? candidate.photo_url
+                              : `http://localhost:5000${candidate.photo_url}`
+                            : "")
+                        }
+                        alt="Candidate"
+                        style={
+                          styles.summaryPhoto
+                        }
+                      />
+                    ) : (
+                      <div
+                        style={
+                          styles.summaryPhotoPlaceholder
+                        }
+                      >
+                        PHOTO
                       </div>
-                    </div>
+                    )}
 
                     <div>
                       <div
@@ -2839,107 +2794,128 @@ export default function RoundOne() {
                           styles.sectionLabel
                         }
                       >
-                        REVIEW
+                        CANDIDATE
                       </div>
 
-                      <h2
+                      <div
                         style={
-                          styles.sectionTitle
+                          styles.summaryName
                         }
                       >
-                        Candidate Details
-                      </h2>
-
-                      <p
-                        style={
-                          styles.summarySubtitle
-                        }
-                      >
-                        Unga details once
-                        confirm pannunga.
-                      </p>
+                        {displayValue(
+                          candidate.full_name
+                        )}
+                      </div>
                     </div>
+                  </div>
 
+                  <div>
                     <div
                       style={
-                        styles.checkIcon
+                        styles.sectionLabel
                       }
                     >
-                      ✓
+                      REVIEW
                     </div>
+
+                    <h2
+                      style={
+                        styles.sectionTitle
+                      }
+                    >
+                      Candidate Details
+                    </h2>
+
+                    <p
+                      style={
+                        styles.summarySubtitle
+                      }
+                    >
+                      Unga details once
+                      confirm pannunga.
+                    </p>
                   </div>
 
                   <div
                     style={
-                      styles.detailsGrid
+                      styles.checkIcon
                     }
                   >
-                    <DetailItem
-                      label="Name"
-                      value={displayValue(
-                        candidate.full_name
-                      )}
-                    />
+                    ✓
+                  </div>
+                </div>
 
-                    <DetailItem
-                      label="Age"
-                      value={displayValue(
-                        candidate.age
-                      )}
-                    />
+                <div
+                  style={
+                    styles.detailsGrid
+                  }
+                >
+                  <DetailItem
+                    label="Name"
+                    value={displayValue(
+                      candidate.full_name
+                    )}
+                  />
 
-                    <DetailItem
-                      label="Gender"
-                      value={displayValue(
-                        candidate.gender
-                      )}
-                    />
+                  <DetailItem
+                    label="Age"
+                    value={displayValue(
+                      candidate.age
+                    )}
+                  />
 
-                    <DetailItem
-                      label="Blood Group"
-                      value={displayValue(
-                        candidate.blood_group
-                      )}
-                    />
+                  <DetailItem
+                    label="Gender"
+                    value={displayValue(
+                      candidate.gender
+                    )}
+                  />
 
-                    <DetailItem
-                      label="Phone"
-                      value={displayValue(
-                        candidate.phone
-                      )}
-                    />
+                  <DetailItem
+                    label="Blood Group"
+                    value={displayValue(
+                      candidate.blood_group
+                    )}
+                  />
 
-                    <DetailItem
-                      label="Email"
-                      value={displayValue(
-                        candidate.email
-                      )}
-                    />
+                  <DetailItem
+                    label="Phone"
+                    value={displayValue(
+                      candidate.phone
+                    )}
+                  />
 
-                    <DetailItem
-                      label="Address"
-                      value={displayValue(
-                        candidate.address
-                      )}
-                      fullWidth
-                    />
+                  <DetailItem
+                    label="Email"
+                    value={displayValue(
+                      candidate.email
+                    )}
+                  />
 
-                    <DetailItem
-                      label="Education"
-                      value={displayValue(
-                        candidate.education
-                      )}
-                    />
+                  <DetailItem
+                    label="Address"
+                    value={displayValue(
+                      candidate.address
+                    )}
+                    fullWidth
+                  />
 
-                    <DetailItem
-                      label="Experience"
-                      value={formatExperience(
-                        candidate.experience_years
-                      )}
-                    />
+                  <DetailItem
+                    label="Education"
+                    value={displayValue(
+                      candidate.education
+                    )}
+                  />
 
-                    {candidate.experience_years !==
-                      0 && (
+                  <DetailItem
+                    label="Experience"
+                    value={formatExperience(
+                      candidate.experience_years
+                    )}
+                  />
+
+                  {candidate.experience_years !==
+                    0 && (
                       <DetailItem
                         label="Previous Company"
                         value={displayValue(
@@ -2947,461 +2923,462 @@ export default function RoundOne() {
                         )}
                       />
                     )}
-                  </div>
+                </div>
 
-                  <div
+                <div
+                  style={
+                    styles.summaryActions
+                  }
+                >
+                  <button
+                    type="button"
+                    onClick={openEdit}
                     style={
-                      styles.summaryActions
+                      styles.editButton
                     }
                   >
-                    <button
-                      type="button"
-                      onClick={openEdit}
-                      style={
-                        styles.editButton
-                      }
-                    >
-                      ✏ Edit Details
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        void handleConfirm()
-                      }
-                      disabled={confirming}
-                      style={
-                        styles.confirmButton
-                      }
-                    >
-                      {confirming
-                        ? "Confirming..."
-                        : "✓ Confirm & Continue"}
-                    </button>
-                  </div>
-                </section>
-              )}
-
-            {/* =================================================
-                COMPLETED
-            ================================================= */}
-
-            {roundConfirmed && (
-              <section
-                style={
-                  styles.completedCard
-                }
-              >
-                <div
-                  style={
-                    styles.completedIcon
-                  }
-                >
-                  ✓
-                </div>
-
-                <div
-                  style={
-                    styles.sectionLabel
-                  }
-                >
-                  ROUND 1 COMPLETED
-                </div>
-
-                <h2
-                  style={
-                    styles.completedTitle
-                  }
-                >
-                  Basic Information
-                  Completed
-                </h2>
-
-                <p
-                  style={
-                    styles.completedText
-                  }
-                >
-                  Unga basic details
-                  successfully confirm
-                  aayiduchu.
-                </p>
-
-                <div
-                  style={
-                    styles.nextRoundCard
-                  }
-                >
-                  <div>
-                    <div
-                      style={
-                        styles.nextRoundLabel
-                      }
-                    >
-                      NEXT
-                    </div>
-
-                    <div
-                      style={
-                        styles.nextRoundTitle
-                      }
-                    >
-                      Round 2 —
-                      Technical Interview
-                    </div>
-
-                    <div
-                      style={
-                        styles.nextRoundText
-                      }
-                    >
-                      Domain-based technical
-                      questions will be
-                      asked in the next
-                      round.
-                    </div>
-                  </div>
+                    ✏ Edit Details
+                  </button>
 
                   <button
                     type="button"
-                    style={
-                      styles.continueButton
-                    }
                     onClick={() =>
-                      console.log(
-                        "Continue to Round 2"
-                      )
+                      void handleConfirm()
+                    }
+                    disabled={confirming}
+                    style={
+                      styles.confirmButton
                     }
                   >
-                    Continue →
+                    {confirming
+                      ? "Confirming..."
+                      : "✓ Confirm & Continue"}
                   </button>
                 </div>
               </section>
             )}
 
-            {/* =================================================
+          {/* =================================================
+                COMPLETED
+            ================================================= */}
+
+          {roundConfirmed && (
+            <section
+              style={
+                styles.completedCard
+              }
+            >
+              <div
+                style={
+                  styles.completedIcon
+                }
+              >
+                ✓
+              </div>
+
+              <div
+                style={
+                  styles.sectionLabel
+                }
+              >
+                ROUND 1 COMPLETED
+              </div>
+
+              <h2
+                style={
+                  styles.completedTitle
+                }
+              >
+                Basic Information
+                Completed
+              </h2>
+
+              <p
+                style={
+                  styles.completedText
+                }
+              >
+                Unga basic details
+                successfully confirm
+                aayiduchu.
+              </p>
+
+              <div
+                style={
+                  styles.nextRoundCard
+                }
+              >
+                <div>
+                  <div
+                    style={
+                      styles.nextRoundLabel
+                    }
+                  >
+                    NEXT
+                  </div>
+
+                  <div
+                    style={
+                      styles.nextRoundTitle
+                    }
+                  >
+                    Round 2 —
+                    Technical Interview
+                  </div>
+
+                  <div
+                    style={
+                      styles.nextRoundText
+                    }
+                  >
+                    Domain-based technical
+                    questions will be
+                    asked in the next
+                    round.
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  style={
+                    styles.continueButton
+                  }
+                  onClick={() =>
+                    console.log(
+                      "Continue to Round 2"
+                    )
+                  }
+                >
+                  Continue →
+                </button>
+              </div>
+            </section>
+          )}
+
+          {/* =================================================
                 EDIT MODAL
             ================================================= */}
 
-            {showEdit && (
+          {showEdit && (
+            <div
+              style={
+                styles.modalOverlay
+              }
+            >
               <div
-                style={
-                  styles.modalOverlay
-                }
+                style={styles.modal}
               >
                 <div
-                  style={styles.modal}
+                  style={
+                    styles.modalHeader
+                  }
                 >
-                  <div
-                    style={
-                      styles.modalHeader
-                    }
-                  >
-                    <div>
-                      <div
-                        style={
-                          styles.sectionLabel
-                        }
-                      >
-                        EDIT
-                      </div>
-
-                      <h2
-                        style={
-                          styles.modalTitle
-                        }
-                      >
-                        Candidate Details
-                      </h2>
+                  <div>
+                    <div
+                      style={
+                        styles.sectionLabel
+                      }
+                    >
+                      EDIT
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setShowEdit(false)
-                      }
+                    <h2
                       style={
-                        styles.closeButton
+                        styles.modalTitle
                       }
                     >
-                      ×
-                    </button>
+                      Candidate Details
+                    </h2>
                   </div>
 
-                  <div
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowEdit(false)
+                    }
                     style={
-                      styles.formGrid
+                      styles.closeButton
                     }
                   >
-                    <EditField
-                      label="Full Name"
-                      value={
-                        editForm.full_name
-                      }
-                      onChange={(value) =>
-                        setEditForm({
-                          ...editForm,
-                          full_name:
-                            value,
-                        })
-                      }
-                    />
+                    ×
+                  </button>
+                </div>
 
-                    <EditField
-                      label="Age"
-                      type="number"
-                      value={
-                        editForm.age ===
+                <div
+                  style={
+                    styles.formGrid
+                  }
+                >
+                  <EditField
+                    label="Full Name"
+                    value={
+                      editForm.full_name
+                    }
+                    onChange={(value) =>
+                      setEditForm({
+                        ...editForm,
+                        full_name:
+                          value,
+                      })
+                    }
+                  />
+
+                  <EditField
+                    label="Age"
+                    type="number"
+                    value={
+                      editForm.age ===
                         null
-                          ? ""
-                          : String(
-                              editForm.age
-                            )
-                      }
-                      onChange={(value) =>
-                        setEditForm({
-                          ...editForm,
-                          age:
-                            value === ""
-                              ? null
-                              : Number(
-                                  value
-                                ),
-                        })
-                      }
-                    />
+                        ? ""
+                        : String(
+                          editForm.age
+                        )
+                    }
+                    onChange={(value) =>
+                      setEditForm({
+                        ...editForm,
+                        age:
+                          value === ""
+                            ? null
+                            : Number(
+                              value
+                            ),
+                      })
+                    }
+                  />
 
-                    <EditSelect
-                      label="Gender"
-                      value={
-                        editForm.gender ??
-                        ""
-                      }
-                      options={[
-                        "",
-                        "male",
-                        "female",
-                      ]}
-                      onChange={(value) =>
-                        setEditForm({
-                          ...editForm,
-                          gender:
-                            value ||
-                            null,
-                        })
-                      }
-                    />
+                  <EditSelect
+                    label="Gender"
+                    value={
+                      editForm.gender ??
+                      ""
+                    }
+                    options={[
+                      "",
+                      "male",
+                      "female",
+                    ]}
+                    onChange={(value) =>
+                      setEditForm({
+                        ...editForm,
+                        gender:
+                          value ||
+                          null,
+                      })
+                    }
+                  />
 
-                    <EditSelect
-                      label="Blood Group"
-                      value={
-                        editForm.blood_group ??
-                        ""
-                      }
-                      options={[
-                        "",
-                        "A+",
-                        "A-",
-                        "B+",
-                        "B-",
-                        "AB+",
-                        "AB-",
-                        "O+",
-                        "O-",
-                        "Unknown",
-                      ]}
-                      onChange={(value) =>
-                        setEditForm({
-                          ...editForm,
-                          blood_group:
-                            value ||
-                            null,
-                        })
-                      }
-                    />
+                  <EditSelect
+                    label="Blood Group"
+                    value={
+                      editForm.blood_group ??
+                      ""
+                    }
+                    options={[
+                      "",
+                      "A+",
+                      "A-",
+                      "B+",
+                      "B-",
+                      "AB+",
+                      "AB-",
+                      "O+",
+                      "O-",
+                      "Unknown",
+                    ]}
+                    onChange={(value) =>
+                      setEditForm({
+                        ...editForm,
+                        blood_group:
+                          value ||
+                          null,
+                      })
+                    }
+                  />
 
-                    <EditField
-                      label="Phone"
-                      value={
-                        editForm.phone ??
-                        ""
-                      }
-                      onChange={(value) =>
-                        setEditForm({
-                          ...editForm,
-                          phone:
-                            value.replace(
-                              /\D/g,
-                              ""
-                            ).slice(
-                              0,
-                              10
-                            ) || null,
-                        })
-                      }
-                    />
-
-                    <EditField
-                      label="Email"
-                      type="email"
-                      value={
-                        editForm.email ??
-                        ""
-                      }
-                      onChange={(value) =>
-                        setEditForm({
-                          ...editForm,
-                          email:
-                            value ||
-                            null,
-                        })
-                      }
-                    />
-
-                    <EditField
-                      label="Address"
-                      value={
-                        editForm.address ??
-                        ""
-                      }
-                      fullWidth
-                      onChange={(value) =>
-                        setEditForm({
-                          ...editForm,
-                          address:
-                            value ||
-                            null,
-                        })
-                      }
-                    />
-
-                    <EditField
-                      label="Education"
-                      value={
-                        editForm.education ??
-                        ""
-                      }
-                      onChange={(value) =>
-                        setEditForm({
-                          ...editForm,
-                          education:
-                            value ||
-                            null,
-                        })
-                      }
-                    />
-
-                    <EditSelect
-                      label="Experience"
-                      value={
-                        editForm.experience_years ===
-                        null
-                          ? ""
-                          : String(
-                              editForm.experience_years
-                            )
-                      }
-                      options={[
-                        "",
-                        "0",
-                        "1",
-                        "2",
-                        "3",
-                        "4",
-                        "5",
-                        "6",
-                        "7",
-                        "8",
-                        "9",
-                        "10",
-                      ]}
-                      onChange={(value) =>
-                        setEditForm({
-                          ...editForm,
-                          experience_years:
-                            value ===
+                  <EditField
+                    label="Phone"
+                    value={
+                      editForm.phone ??
+                      ""
+                    }
+                    onChange={(value) =>
+                      setEditForm({
+                        ...editForm,
+                        phone:
+                          value.replace(
+                            /\D/g,
                             ""
-                              ? null
-                              : Number(
-                                  value
-                                ),
-                          previous_company:
-                            value ===
+                          ).slice(
+                            0,
+                            10
+                          ) || null,
+                      })
+                    }
+                  />
+
+                  <EditField
+                    label="Email"
+                    type="email"
+                    value={
+                      editForm.email ??
+                      ""
+                    }
+                    onChange={(value) =>
+                      setEditForm({
+                        ...editForm,
+                        email:
+                          value ||
+                          null,
+                      })
+                    }
+                  />
+
+                  <EditField
+                    label="Address"
+                    value={
+                      editForm.address ??
+                      ""
+                    }
+                    fullWidth
+                    onChange={(value) =>
+                      setEditForm({
+                        ...editForm,
+                        address:
+                          value ||
+                          null,
+                      })
+                    }
+                  />
+
+                  <EditField
+                    label="Education"
+                    value={
+                      editForm.education ??
+                      ""
+                    }
+                    onChange={(value) =>
+                      setEditForm({
+                        ...editForm,
+                        education:
+                          value ||
+                          null,
+                      })
+                    }
+                  />
+
+                  <EditSelect
+                    label="Experience"
+                    value={
+                      editForm.experience_years ===
+                        null
+                        ? ""
+                        : String(
+                          editForm.experience_years
+                        )
+                    }
+                    options={[
+                      "",
+                      "0",
+                      "1",
+                      "2",
+                      "3",
+                      "4",
+                      "5",
+                      "6",
+                      "7",
+                      "8",
+                      "9",
+                      "10",
+                    ]}
+                    onChange={(value) =>
+                      setEditForm({
+                        ...editForm,
+                        experience_years:
+                          value ===
+                            ""
+                            ? null
+                            : Number(
+                              value
+                            ),
+                        previous_company:
+                          value ===
                             "0"
-                              ? null
-                              : editForm.previous_company,
-                        })
-                      }
-                    />
+                            ? null
+                            : editForm.previous_company,
+                      })
+                    }
+                  />
 
-                    <EditField
-                      label="Previous Company"
-                      value={
-                        editForm.previous_company ??
-                        ""
-                      }
-                      disabled={
-                        editForm.experience_years ===
-                        0
-                      }
-                      onChange={(value) =>
-                        setEditForm({
-                          ...editForm,
-                          previous_company:
-                            value ||
-                            null,
-                        })
-                      }
-                    />
-                  </div>
+                  <EditField
+                    label="Previous Company"
+                    value={
+                      editForm.previous_company ??
+                      ""
+                    }
+                    disabled={
+                      editForm.experience_years ===
+                      0
+                    }
+                    onChange={(value) =>
+                      setEditForm({
+                        ...editForm,
+                        previous_company:
+                          value ||
+                          null,
+                      })
+                    }
+                  />
+                </div>
 
-                  <div
+                <div
+                  style={
+                    styles.modalActions
+                  }
+                >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowEdit(false)
+                    }
                     style={
-                      styles.modalActions
+                      styles.cancelButton
                     }
                   >
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setShowEdit(false)
-                      }
-                      style={
-                        styles.cancelButton
-                      }
-                    >
-                      Cancel
-                    </button>
+                    Cancel
+                  </button>
 
-                    <button
-                      type="button"
-                      onClick={() =>
-                        void handleEditSave()
-                      }
-                      disabled={saving}
-                      style={
-                        styles.saveButton
-                      }
-                    >
-                      {saving
-                        ? "Saving..."
-                        : "Save Changes"}
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void handleEditSave()
+                    }
+                    disabled={saving}
+                    style={
+                      styles.saveButton
+                    }
+                  >
+                    {saving
+                      ? "Saving..."
+                      : "Save Changes"}
+                  </button>
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            <footer
-              style={styles.footer}
-            >
-              Rajapalayam Mills Limited
-              • AI Recruitment System
-            </footer>
-          </>
-        )}
-      </div>
+          <footer
+            style={styles.footer}
+          >
+            Rajapalayam Mills Limited
+            • AI Recruitment System
+          </footer>
+        </>
+      )}
     </div>
+  </div>
   );
+
 }
 
 /* =========================================================
