@@ -682,63 +682,56 @@ export default function RoundOne() {
   }
 
   async function askNextMissingField(
-    currentCandidate: CandidateDetails
-  ) {
-    const missingField =
-      getNextRequiredConversationField(
-        currentCandidate
-      );
-
-    if (!missingField) {
-      currentFieldRef.current = null;
-      askedFieldRef.current = null;
-
-      await finishConversation();
-      return;
-    }
-
-    if (
-      askedFieldRef.current ===
-      missingField
-    ) {
-      return;
-    }
-
-    const question =
-      getQuestion(missingField);
-
-    if (!question) {
-      console.error(
-        "Question not found:",
-        missingField
-      );
-      return;
-    }
-
-    currentFieldRef.current =
-      missingField;
-
-    askedFieldRef.current =
-      missingField;
-
-    const text =
-      candidateLevel === "workmen"
-        ? question.question_text_tamil ||
-          question.question_text
-        : question.question_text;
-
-    await addAIMessage(
-  text,
-  candidateLevel
-);
-
-if (
-  !showFinalContactFields &&
-  !showSummary &&
-  !roundConfirmed
+  currentCandidate: CandidateDetails
 ) {
-  startListening();
-}
+  const missingField =
+    getNextRequiredConversationField(currentCandidate);
+
+  if (!missingField) {
+    currentFieldRef.current = null;
+    askedFieldRef.current = null;
+
+    await finishConversation();
+    return;
+  }
+
+  if (askedFieldRef.current === missingField) {
+    return;
+  }
+
+  const question = getQuestion(missingField);
+
+  if (!question) {
+    console.error(
+      "Question not found:",
+      missingField
+    );
+    return;
+  }
+
+  currentFieldRef.current = missingField;
+  askedFieldRef.current = missingField;
+
+  const text =
+    candidateLevel === "workmen"
+      ? question.question_text_tamil ||
+        question.question_text
+      : question.question_text;
+
+  await addAIMessage(
+    text,
+    candidateLevel
+  );
+
+  if (
+    !showFinalContactFields &&
+    !showSummary &&
+    !roundConfirmed
+  ) {
+    setTimeout(() => {
+      startListening();
+    }, 500);
+  }
 }
 
   /* =========================================================
