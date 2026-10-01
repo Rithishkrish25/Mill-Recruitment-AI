@@ -13,6 +13,7 @@ async function initDatabase() {
       CREATE EXTENSION IF NOT EXISTS pgcrypto;
     `);
 
+
     // ---------------------------------------------------------
     // CORE TABLES
     // ---------------------------------------------------------
@@ -59,6 +60,11 @@ async function initDatabase() {
     await client.query(`
       ALTER TABLE candidates
       ADD COLUMN IF NOT EXISTS candidate_photo_url TEXT;
+    `);
+
+    await client.query(`
+      ALTER TABLE candidates
+      ADD COLUMN IF NOT EXISTS candidate_level VARCHAR(20);
     `);
 
     await client.query(`
